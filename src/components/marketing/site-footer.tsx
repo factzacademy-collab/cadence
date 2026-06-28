@@ -134,8 +134,10 @@ export function SiteFooter() {
               className="flex items-center gap-2 text-xs text-muted-foreground"
             >
               <span aria-hidden>🌐</span>
+              <span className="sr-only">Region and language</span>
               <select
                 id="region-select"
+                aria-label="Region and language"
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
                 className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

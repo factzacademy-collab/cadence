@@ -700,3 +700,66 @@ Stage Summary:
 - Lint: 0 errors, 1 pre-existing warning (shell composer.tsx react-hook-form — Task 2-b's file, untouched). Dev log: all API routes 200, no runtime errors.
 - Conventions followed: PageHeader at top of every view, SectionCard for grouping, StatCard for KPIs, Avatar for people, EmptyState + SkeletonGrid for loading/empty, sonner toast on all mutations, date-fns for dates, fully responsive + dark-mode + accessible.
 ============================================================
+
+---
+Task ID: P9-doc
+Agent: Principal Software Architect (general-purpose sub agent)
+Task: Write the Phase 9 Implementation Plan document for Cadence — a comprehensive, senior-engineer-ready implementation plan reflecting the as-built system.
+
+Work Log:
+- Read /home/z/my-project/worklog.md IN FULL (702 lines, Tasks 1 / 2-a / 2-b / 3-a / 3-b / 3-c) plus the agent-ctx docs (3-a-publishing-cluster.md), prisma/schema.prisma, src/lib/store.ts, src/lib/brand.ts, src/lib/ai.ts, src/app/page.tsx, src/app/layout.tsx, next.config.ts, package.json, and src/hooks/use-api.ts to ground the plan in the ACTUAL built system.
+- Verified the actual src/ tree (40+ shadcn/ui primitives, 14 dashboard views, 11 marketing sections, 11 API route files, single-route SPA with hash deep-linking).
+- Wrote /home/z/my-project/IMPLEMENTATION_PLAN.md containing all 8 required sections:
+  1. Executive Summary (what Cadence is, tech stack table, current build state, how to run it, Phase 9 mission)
+  2. Epics → Features → Tasks → Subtasks (9 epics in table form, every task marked Done/In Progress/Planned against the worklog)
+  3. Developer Checklist (~60 tickable items grouped by Setup / Design System / Frontend / Backend / AI / Accessibility / Performance / SEO)
+  4. Testing Checklist (~50 items including all required golden-path E2E flows: composer→queue, AI chat→real LLM, pricing monthly/annual toggle, dark mode persists, mobile nav sheet, plus axe a11y, visual regression, AI fallback tests)
+  5. QA Checklist (~40 items covering cross-browser, responsive breakpoints (390/768/1440/1920), dark/light parity, keyboard nav, NVDA/VoiceOver, reduced motion, empty/loading/error states, toasts, data integrity, error boundaries)
+  6. Deployment Checklist (~40 items: env vars, Postgres migration, secrets, build, standalone output, Vercel/Docker hosting, CDN, image optimization, Sentry, analytics, domain/DNS/SSL, rate limiting, CORS, security headers, backup, rollback)
+  7. Architecture Reference (actual src/ folder tree, data flow diagram, Zustand + React Query state management, single-route SPA pattern with hash deep-linking, shared-primitives contract table, AI integration internals, design-token system)
+  8. Roadmap (Now/Next/Later — 30 items including real OAuth, queue worker, email, multi-workspace, Postgres, RBAC, audit logs, full-text search, mobile app, public API, SSO/SAML) + Appendix A (file inventory) + Appendix B (glossary)
+- All references are concrete file paths / view names / hook names from the actual build (no generic boilerplate).
+
+Stage Summary:
+- IMPLEMENTATION_PLAN.md is the single source of truth for Phase 9 forward work (auth, persistence, Postgres migration, test pyramid, security, observability, deployment, post-MVP roadmap).
+- Document path: /home/z/my-project/IMPLEMENTATION_PLAN.md
+- Worklog updated with this P9-doc entry.
+============================================================
+
+---
+Task ID: P9-auth-persist-lighthouse
+Agent: Principal Architect (main, direct build)
+Task: (1) Wire NextAuth credentials auth + Prisma persistence; (2) Run Lighthouse and fix a11y/SEO/best-practices; (3) [doc handled by P9-doc subagent].
+
+Work Log:
+- Added `passwordHash` field to User model; `bun run db:push`.
+- Created `src/lib/password.ts` (scrypt hash/verify, gradientFor).
+- Created `src/lib/auth.ts` (NextAuth options: Credentials provider, JWT session, callbacks wiring user id + avatarColor).
+- Created `src/app/api/auth/[...nextauth]/route.ts` and `src/app/api/auth/register/route.ts` (zod-validated signup → creates User + Workspace + Owner membership).
+- Created `prisma/seed.ts` (demo user demo@cadence.app / cadence123 + workspace + accounts, campaigns, team, integrations, posts, inbox, activity). Added `db:seed` script to package.json. Added NEXTAUTH_SECRET/URL to .env. Ran seed successfully.
+- Refactored `src/lib/data/store.ts` to a hybrid read-through architecture: every read tries Prisma first and falls back to the in-memory mock cache on error; every write persists to Prisma AND mirrors into the cache. All methods now async. Added workspace-resolution for createPost/addMedia/inviteMember/logActivity. Added singleton-recreation guard so HMR picks up new class definitions.
+- Updated all 7 API routes (posts, posts/[id], media, accounts, inbox, team, integrations, activity, campaigns) to await the now-async store methods.
+- Added `SessionProvider` (from next-auth/react) to `src/components/providers.tsx`.
+- Created `src/components/marketing/auth-dialog.tsx` — Sign in / Sign up tabbed dialog with react-hook-form + zod, demo-login button, real signIn/register calls.
+- Wired AuthDialog into `site-header.tsx` (Sign in → signin mode, Start free → signup mode).
+- Wired real `signOut` (dynamic import from next-auth/react) into the sidebar user dropdown.
+- Fixed critical bug: `next-auth` client imports must come from `next-auth/react` (SessionProvider, signIn, signOut) — the bare `next-auth` import caused "Element type is invalid" crash.
+- Verified end-to-end in browser: demo login → real NextAuth JWT session → dashboard Overview renders with greeting; no errors.
+
+Lighthouse (marketing page /):
+- Baseline: a11y 92, best-practices 96, seo 100.
+- Fixed: footer region `<select>` missing visible label (added sr-only + aria-label); testimonials star-rating `<div aria-label>` prohibited on non-interactive div (added role="img"); channels buttons aria-label vs visible-text mismatch (removed aria-label, let visible text be the accessible name); added favicon.svg + metadata.icons (fixed 404 console error).
+- Final: a11y 100, best-practices 100, seo 100. (Performance not targeted — dev mode is unminified; production build required for real perf scores.)
+
+Persistence verification:
+- Direct Prisma script: created post with cuid id, count went 6→7 → confirmed DB writes work.
+- API round-trip on fresh server: POST /api/posts returned cuid id `cmqy3u4hk...`, GET /api/posts found it persisted → confirmed full stack persistence.
+- All reads now return Prisma data (cuid ids) with mock fallback on error.
+
+Stage Summary:
+- Authentication is real (NextAuth credentials + JWT + register route that provisions workspace).
+- Data persistence is real (Prisma read-through + write-through, verified by cuid ids and round-trip).
+- Lighthouse: a11y 100, best-practices 100, seo 100 on the marketing page.
+- Demo login: demo@cadence.app / cadence123 (seeded).
+- Dev server restarted once to pick up regenerated Prisma client after schema change.
+============================================================

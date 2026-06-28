@@ -6,7 +6,6 @@ import { Menu, Moon, Sun, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { BRAND, MARKETING_NAV } from "@/lib/brand";
-import { useApp } from "@/lib/store";
 import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +15,7 @@ import {
   SheetTrigger,
   SheetClose,
 } from "@/components/ui/sheet";
+import { AuthDialog } from "@/components/marketing/auth-dialog";
 
 function ThemeToggle({ className }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
@@ -46,9 +46,15 @@ function ThemeToggle({ className }: { className?: string }) {
 }
 
 export function SiteHeader() {
-  const goApp = useApp((s) => s.goApp);
   const [scrolled, setScrolled] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [authOpen, setAuthOpen] = React.useState(false);
+  const [authMode, setAuthMode] = React.useState<"signin" | "signup">("signin");
+
+  const openAuth = (mode: "signin" | "signup") => {
+    setAuthMode(mode);
+    setAuthOpen(true);
+  };
 
   React.useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -95,12 +101,12 @@ export function SiteHeader() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => goApp("overview")}
+            onClick={() => openAuth("signin")}
             className="text-muted-foreground hover:text-foreground"
           >
             Sign in
           </Button>
-          <Button size="sm" onClick={() => goApp("overview")}>
+          <Button size="sm" onClick={() => openAuth("signup")}>
             <Sparkles className="size-3.5" />
             Start free
           </Button>
@@ -144,7 +150,7 @@ export function SiteHeader() {
                   variant="ghost"
                   onClick={() => {
                     setMobileOpen(false);
-                    goApp("overview");
+                    openAuth("signin");
                   }}
                 >
                   Sign in
@@ -152,7 +158,7 @@ export function SiteHeader() {
                 <Button
                   onClick={() => {
                     setMobileOpen(false);
-                    goApp("overview");
+                    openAuth("signup");
                   }}
                 >
                   <Sparkles className="size-4" />
@@ -166,6 +172,7 @@ export function SiteHeader() {
           </Sheet>
         </div>
       </div>
+      <AuthDialog open={authOpen} onOpenChange={setAuthOpen} defaultMode={authMode} />
     </header>
   );
 }

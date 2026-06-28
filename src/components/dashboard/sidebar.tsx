@@ -436,7 +436,13 @@ function UserMenuItems({
       <DropdownMenuSeparator />
       <DropdownMenuItem
         variant="destructive"
-        onClick={() => toast.success("Signed out (demo)")}
+        onClick={async () => {
+          const { signOut } = await import("next-auth/react");
+          toast.success("Signed out");
+          await signOut({ redirect: false });
+          goMarketing();
+          setMobileNav(false);
+        }}
       >
         <LogOut className="size-4" />
         Sign out

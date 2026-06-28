@@ -1,0 +1,703 @@
+     1→# Cadence — Build Worklog
+     2→
+     3→This file tracks all agent work on the Cadence social-media orchestration platform
+     4→(an original recreation inspired by the public behavior of buffer.com).
+     5→
+     6→Shared conventions:
+     7→- Brand: "Cadence" (original). Primary color: deep teal. Accents: coral, amber, mint, plum.
+     8→- Single user-facing route: `/` (src/app/page.tsx). App state is driven by a
+     9→  Zustand store (`src/lib/store.ts`) with hash-based deep-linking (`#app/<view>`).
+    10→- Design tokens live in `src/app/globals.css` (oklch, light + dark). Custom
+    11→  utilities: `.scrollbar-cadence`, `.text-gradient-brand`, `.bg-grid`, `.bg-dots`,
+    12→  `.glass`, `.shimmer`, animations (`animate-fade-up`, `animate-float`,
+    13→  `animate-marquee`, `animate-pulse-ring`). Reduced-motion is respected.
+    14→- shadcn/ui components already exist in `src/components/ui/*` — USE THEM, do not
+    15→  reinvent. Import icons from `lucide-react`.
+    16→- Brand primitives: `src/components/brand/logo.tsx` (`Logo`, `LogoMark`),
+    17→  `src/components/brand/platform-icon.tsx` (`PlatformIcon`, `PlatformBadge`).
+    18→- Data layer:
+    19→  - Mock seed: `src/lib/data/mock.ts` (posts, media, accounts, campaigns,
+    20→    analytics, inbox, team, integrations, activity, testimonials, faqs, pricing).
+    21→  - In-memory CRUD store: `src/lib/data/store.ts` (singleton `store`).
+    22→  - API routes under `src/app/api/*` (posts, analytics, media, accounts, inbox,
+    23→    team, integrations, activity, campaigns, ai/chat, ai/captions).
+    24→  - React Query hooks: `src/hooks/use-api.ts`.
+    25→- AI: `src/lib/ai.ts` wraps `z-ai-web-dev-sdk` (server-only). `/api/ai/chat`
+    26→  and `/api/ai/captions` are wired and have graceful fallbacks.
+    27→- Prisma schema pushed (`prisma/schema.prisma`). `db` client: `src/lib/db.ts`.
+    28→- Footer rule: every page that has a footer MUST use a root wrapper with
+    29→  `min-h-screen flex flex-col` and `mt-auto` on the footer so it sticks to the
+    30→  bottom on short content and pushes down on long content.
+    31→- Tailwind v4 (CSS-first). Use semantic tokens (`bg-background`, `text-primary`,
+    32→  `text-muted-foreground`, `border-border`, etc.). Do NOT use indigo/blue as
+    33→  primary brand colors. Teal/coral/amber/mint/plum are the brand palette.
+    34→
+    35→---
+    36→Task ID: 1
+    37→Agent: Principal Architect (main)
+    38→Task: Foundation — design system, providers, view-router store, brand, types, mock data, Prisma schema, API routes, React Query hooks, root page shell.
+    39→
+    40→Work Log:
+    41→- Wrote custom design system in `src/app/globals.css` (teal primary, coral/amber/mint/plum accents, light + dark, custom utilities, keyframes, reduced-motion, scrollbars).
+    42→- Added `src/components/providers.tsx` (next-themes + React Query + sonner + tooltip).
+    43→- Updated `src/app/layout.tsx` (Geist fonts, full metadata/OG, providers).
+    44→- Added `src/lib/store.ts` (Zustand view router + hash deep-linking helpers).
+    45→- Added `src/lib/brand.ts` (brand constants, platform metadata, nav, footer columns).
+    46→- Added `src/lib/types.ts` (full domain types) and `src/lib/ui-store.ts`.
+    47→- Added `src/components/brand/logo.tsx` and `src/components/brand/platform-icon.tsx` (original SVG glyphs).
+    48→- Added `src/lib/data/mock.ts` (deterministic seed: 42 posts, 12 media, 8 accounts, campaigns, 30-day analytics, inbox, team, integrations, activity, testimonials, FAQs, pricing, stats).
+    49→- Added `src/lib/data/store.ts` (in-memory CRUD singleton).
+    50→- Added `src/lib/ai.ts` (z-ai-web-dev-sdk wrapper; `cadenceChat`, `generateCaptions`).
+    51→- Wrote Prisma schema (User, Workspace, Membership, SocialAccount, Post, MediaAsset, Campaign, InboxItem, TeamMember, WorkspaceIntegration, ActivityEvent, AiConversation, AiMessage, Notification, AuditLog) and ran `bun run db:push` (OK).
+    52→- Wrote API routes: posts (GET/POST + [id] PATCH/DELETE), analytics, media, accounts, inbox, team, integrations, activity, campaigns, ai/chat, ai/captions.
+    53→- Added `src/hooks/use-api.ts` (React Query hooks for every endpoint).
+    54→- Wrote `src/app/page.tsx` (lazy-loaded MarketingSite / DashboardApp with hash sync + Suspense loader) and stub entry components.
+    55→
+    56→Stage Summary:
+    57→- Foundation complete and lint-clean. Dashboard + marketing entry components are stubs and need full implementation by subagents.
+    58→- View router switches the whole app within the single `/` route; dashboard sections are AppView values in the store.
+    59→- Backend is interactive (CRUD posts, toggle integrations, resolve inbox, invite members, AI chat + caption generation).
+    60→
+    61→---
+    62→
+    63→---
+    64→Task ID: 2-a
+    65→Agent: Staff Frontend Engineer + Senior UX Designer
+    66→Task: Public marketing site — complete, world-class, fully responsive marketing surface for Cadence (header, 11 sections, footer).
+    67→
+    68→Work Log:
+    69→- Replaced stub `src/components/marketing/marketing-site.tsx` with a full
+    70→  composition: root `min-h-screen flex flex-col bg-background`, skip-link,
+    71→  `SiteHeader`, `<main id="main" className="flex-1">` with 11 sections in
+    72→  order (Hero, Logos, Features, HowItWorks, Channels, AnalyticsShowcase,
+    73→  AiSection, Testimonials, Pricing, Faq, Cta), and `SiteFooter` (carries
+    74→  `mt-auto` so the sticky-footer rule holds on short content).
+    75→- Added `src/components/marketing/site-header.tsx`: sticky, glass-on-scroll
+    76→  (scroll listener, 8px threshold), desktop nav from MARKETING_NAV anchors,
+    77→  next-themes Sun/Moon toggle (hydration-safe via mounted flag), "Sign in"
+    78→  ghost + "Start free" primary → `goApp('overview')`. Mobile hamburger
+    79→  opens a `Sheet` with nav + CTAs + trust line.
+    80→- Added `src/components/marketing/site-footer.tsx`: brand + tagline +
+    81→  newsletter form (sonner toast) + social icons; 4 link columns from
+    82→  FOOTER_COLUMNS; bottom row with copyright, legal links, decorative
+    83→  region/language `<select>`, "Made with ❤ by the Cadence team".
+    84→- Added 11 section components under `src/components/marketing/sections/`:
+    85→  - `hero.tsx` — gradient headline, BRAND.tagline, Start free + Watch demo
+    86→    (Dialog), CSS product mock (tilted glass card with heat-map calendar +
+    87→    queue cards + floating stat chips via `.animate-float` + 3
+    88→    PlatformBadges), `.bg-grid` + blurred brand blobs, framer-motion
+    89→    staggered fade-up gated by `useReducedMotion`.
+    90→  - `logos.tsx` — "Trusted by 75,000+ teams" + seamless marquee of 8
+    91→    fictional wordmarks (Lumio, Northbeam, Fjord Studio, Verde, Loop
+    92→    Coffee, Cadence Labs, Halcyon, Pinegrove).
+    93→  - `features.tsx` — 6 feature cards (Composer, Content Calendar, Approval
+    94→    Workflows, Analytics, Engagement Inbox, AI Assistant), tinted icon
+    95→    tiles, hover lift + border highlight.
+    96→  - `how-it-works.tsx` — 3 steps (Plan → Publish → Measure), gradient
+    97→    icon tiles, desktop connector lines.
+    98→  - `channels.tsx` — 8 platform tiles from PLATFORM_LIST + PlatformIcon,
+    99→    decorative "Connect" affordance.
+   100→  - `analytics-showcase.tsx` — split: copy + bullets + CTA on the left;
+   101→    recharts AreaChart (impressions + engagement, 12-week series) in a
+   102→    glass card on the right, with 2 floating KPI chips. Custom tooltip.
+   103→  - `ai-section.tsx` — mock chat exchange (user bubble + 3 AI caption
+   104→    suggestions with platform badges + hashtags) on the left; copy + CTA
+   105→    on the right; brand gradient blobs.
+   106→  - `testimonials.tsx` — TESTIMONIALS grid, gradient avatar initials,
+   107→    overall rating row (5 stars + "4.9/5 from 2,400+ reviews").
+   108→  - `pricing.tsx` — PRICING (3 tiers), highlighted middle, Monthly/Annual
+   109→    toggle with framer-motion `layoutId` pill, annual = 20% off (client
+   110→    math), price animates on toggle via `AnimatePresence`. CTA → goApp.
+   111→  - `faq.tsx` — FAQS array in a shadcn Accordion.
+   112→  - `cta.tsx` — full-width brand-gradient band, headline, email input +
+   113→    Start free (sonner toast + email validation), "Talk to sales" link.
+   114→
+   115→Conventions future agents MUST follow (full detail in
+   116→`/agent-ctx/2-a-marketing-site.md`):
+   117→- Sticky footer: root `min-h-screen flex flex-col`, footer `mt-auto`.
+   118→- Single-route app: never use `<Link>`/`useRouter`; enter dashboard via
+   119→  `useApp(s => s.goApp)('overview')`.
+   120→- Section ids are part of the nav contract: `#top`, `#features`,
+   121→  `#channels`, `#customers` (testimonials), `#resources` (faq), `#pricing`,
+   122→  `#cta`. Do not rename without updating `MARKETING_NAV` in brand.ts.
+   123→- Theme toggle: hydration-safe via `mounted` flag + `resolvedTheme`.
+   124→- Toasts: `sonner` `toast` for all form submit feedback; email regex is
+   125→  `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`.
+   126→- Visuals are CSS/SVG/recharts — no heavy images. Reuse globals.css
+   127→  utilities (`.bg-grid`, `.bg-dots`, `.glass`, `.text-gradient-brand`,
+   128→  `.animate-float`, `.animate-marquee`, `.mask-fade-x`, `.mask-fade-b`).
+   129→- framer-motion: subtle, always gate with `useReducedMotion()`.
+   130→- No hardcoded brand colors — use semantic tokens + brand accent tokens
+   131→  (`text-coral`, `text-mint`, `text-amber-brand`, `text-plum`). Decorative
+   132→  gradients (blobs, CTA band) are the only intentional exceptions.
+   133→- Accessibility: landmark `aria-labelledby`, skip-link, keyboard-focusable
+   134→  interactive elements, visible focus rings (global in globals.css).
+   135→
+   136→Stage Summary:
+   137→- Marketing site complete and lint-clean (0 errors, 2 pre-existing
+   138→  warnings outside this scope in `src/app/page.tsx` and
+   139→  `src/lib/data/store.ts`). Page renders HTTP 200; SSR HTML contains all
+   140→  key marketing copy. Ready for dashboard build-out (Task 2-b+).
+   141→
+   142→---
+   143→Task ID: 2-b
+   144→Agent: Staff Frontend Engineer
+   145→Task: Dashboard shell + Overview view + shared primitives + placeholder views for Cadence.
+   146→
+   147→Work Log:
+   148→- Replaced the `src/components/dashboard/dashboard-app.tsx` stub with a full
+   149→  app shell: a flex `min-h-screen` container holding the Sidebar, a main
+   150→  column (Topbar + scrollable `<main>`), the global Composer Sheet, and the
+   151→  Command Palette. Renders the active view from the store via a static
+   152→  `VIEW_COMPONENTS` record (no edit needed when later agents replace a
+   153→  placeholder file). Includes a skip-link, ⌘K / "c" keyboard shortcuts, and
+   154→  a `framer-motion` `AnimatePresence` page transition keyed by `view`.
+   155→- Built `src/components/dashboard/sidebar.tsx` — custom aside (not the
+   156→  shadcn `<Sidebar>` system, to keep state in our store). Four nav groups
+   157→  (Plan / Engage / Insights / Workspace), active-state highlight with a
+   158→  left accent bar, icon-only rail mode with tooltips when collapsed,
+   159→  desktop ⌘B toggle, connected-channels strip (via `useAccounts`), a
+   160→  workspace switcher dropdown, and a current-user dropdown with theme
+   161→  toggle, "Back to site", and "Sign out".
+   162→- Built `src/components/dashboard/topbar.tsx` — sticky glass bar with
+   163→  mobile hamburger, derived page title, a "Queue: N queued" KPI pill
+   164→  (from `usePosts({ status: 'scheduled' })`), a command-palette trigger
+   165→  styled like a search input (with ⌘K hint), "Create post" primary
+   166→  button, notifications bell dropdown, theme toggle, help button, and
+   167→  avatar dropdown.
+   168→- Built `src/components/dashboard/command-palette.tsx` — `CommandDialog`
+   169→  with three groups: Navigate (every view), Actions (create post,
+   170→  analytics, switch theme, back to site), and Posts (filterable list
+   171→  from `usePosts()` that opens the composer in edit mode).
+   172→- Built `src/components/dashboard/composer.tsx` — wide right-side Sheet
+   173→  with a two-column layout (editor | live preview). Multi-select
+   174→  platform chips, char counter with dynamic most-restrictive limit
+   175→  (X=280, LinkedIn=3000, others=2200), datetime-local input with
+   176→  "Now / Tomorrow 9am / Next week 9am" presets, a Popover media picker
+   177→  (via `useMedia`), AI caption generation (via `useGenerateCaptions`,
+   178→  shows 3 suggestion chips), campaign selector (via `useCampaigns`),
+   179→  status select (draft/scheduled/in-review), react-hook-form + zod
+   180→  validation, live preview card with avatar/text/platform
+   181→  badges/media thumbnail, and a footer with Discard / Save draft /
+   182→  Schedule. Edit mode hydrates from `composerPostId`.
+   183→- Built `src/components/dashboard/views/overview.tsx` — full Overview
+   184→  dashboard: PageHeader with greeting + date, 4 StatCards (Impressions,
+   185→  Reach, Engagement, Followers) with 7-day deltas and MiniSparklines
+   186→  computed from `useAnalytics().timeseries`, a "This week" horizontal
+   187→  scroll of PostCards, two-column layout with Upcoming queue + Activity
+   188→  feed (icon timeline from `useActivity`) + Audience-by-platform donut
+   189→  (recharts Pie from `useAnalytics().breakdown`), a 30-day Performance
+   190→  area chart (recharts AreaChart) with a side legend, and a
+   191→  Campaigns-in-flight strip (from `useCampaigns`). All sections show
+   192→  shimmer skeletons while loading.
+   193→- Built `src/components/dashboard/shared.tsx` — the shared-primitives
+   194→  contract documented below.
+   195→- Built `src/components/dashboard/views/_placeholder.tsx` — generic
+   196→  `ViewPlaceholder` (gradient icon swatch, "Coming together" pill, CTA
+   197→  back to Overview) and 13 distinct placeholder views (calendar, queue,
+   198→  composer, analytics, reports, audience, media, ai, inbox, settings,
+   199→  integrations, billing, team), each with a unique lucide icon, title,
+   200→  one-line description, and on-brand accent gradient.
+   201→- Verified: `bun run lint` passes (0 errors, 1 unavoidable warning from
+   202→  react-hook-form's `watch()` API vs React Compiler). Dev server
+   203→  compiles clean and serves HTTP 200 on `/`.
+   204→
+   205→Stage Summary:
+   206→- Dashboard shell, Overview view, shared primitives, and 13 placeholder
+   207→  views are in place. Later agents can replace any individual
+   208→  `src/components/dashboard/views/<view>.tsx` file with a full
+   209→  implementation WITHOUT touching `dashboard-app.tsx` — the view router
+   210→  is a static record keyed by AppView.
+   211→- All data flows through React Query hooks (`use-api.ts`). No view
+   212→  imports mock data directly except for purely decorative constants
+   213→  (e.g. `PLATFORMS`).
+   214→
+   215→============================================================
+   216→SHARED DASHBOARD PRIMITIVES — CONTRACT
+   217→File: `src/components/dashboard/shared.tsx`
+   218→Import path: `@/components/dashboard/shared`
+   219→All primitives are client-safe ("use client" at the top of the file).
+   220→
+   221→1. PageHeader({ title, description?, actions?, className? })
+   222→   - Consistent view header. `title` is rendered inside an <h1>.
+   223→   - `actions` is a flex row of buttons/links on the right (wraps on
+   224→     mobile). Use this at the top of every view.
+   225→
+   226→2. StatCard({ label, value, delta?, deltaLabel?, icon?, accent?, spark? })
+   227→   - KPI card with a label, big value, optional delta percentage
+   228→     (positive = mint, negative = destructive), optional deltaLabel,
+   229→     optional lucide `icon` rendered in a tinted swatch (use `accent`
+   230→     like "text-primary", "text-coral", "text-mint", "text-plum"),
+   231→     and optional `spark: number[]` rendered as a MiniSparkline.
+   232→
+   233→3. SectionCard({ title?, description?, actions?, children?, className?, bodyClassName? })
+   234→   - Titled card wrapper used to group content inside a view. Header
+   235→     is omitted if none of title/description/actions are passed.
+   236→     `bodyClassName` defaults to `p-5`.
+   237→
+   238→4. StatusBadge({ status })
+   239→   - Colored Badge for PostStatus union:
+   240→     draft (muted), scheduled (primary), published (mint),
+   241→     failed (destructive), in-review (amber).
+   242→
+   243→5. PostCard({ post })
+   244→   - Compact post row: platform badges (stacked, +N overflow), 2-line
+   245→     text snippet, relative or absolute time, StatusBadge, and a
+   246→     kebab DropdownMenu with Edit (openComposer(post.id)), Duplicate
+   247→     (useCreatePost), Delete (useDeletePost). All mutations fire
+   248→     sonner toasts. Self-contained — just drop it in any list.
+   249→
+   250→6. EmptyState({ icon?, title, description?, action?, className? })
+   251→   - Tasteful dashed-border empty state with optional icon swatch,
+   252→     title, description, and optional CTA node.
+   253→
+   254→7. SkeletonGrid({ count = 3, className? })
+   255→   - Grid of shimmer cards (uses `.shimmer` utility from globals.css).
+   256→
+   257→8. Avatar({ name, color = "from-primary to-mint", size = "default", className? })
+   258→   - Gradient initials avatar built on the shadcn <Avatar> primitive.
+   259→     `color` is a tailwind gradient class string. `size` is
+   260→     "sm" | "default" | "lg". Use this everywhere you need a user/team
+   261→     avatar (NOT the platform badge).
+   262→     NOTE: This is named `Avatar` and lives in
+   263→     `@/components/dashboard/shared`. The shadcn Avatar lives in
+   264→     `@/components/ui/avatar` — disambiguate by import path.
+   265→
+   266→9. MiniSparkline({ data: number[], color?, className? })
+   267→   - Tiny inline recharts LineChart (no axes). `data` is a plain
+   268→     number[]. Returns null if data has fewer than 2 points.
+   269→
+   270→10. MiniArea({ data, dataKey, color?, height?, formatX? })
+   271→    - Small recharts AreaChart helper. `data` is an array of records,
+   272→      `dataKey` is the key to plot. Includes a gradient fill.
+   273→
+   274→11. DonutChart({ data: { name, value, color }[], height?, innerRadius?, outerRadius? })
+   275→    - recharts PieChart donut. `color` per slice should be a CSS
+   276→      color (var(--primary), oklch(...), etc.).
+   277→
+   278→12. Toolbar({ children?, trailing?, className? })
+   279→    - Horizontal bar with leading filters and trailing actions. Use
+   280→      at the top of list/table views.
+   281→
+   282→Helpers (also exported):
+   283→- formatCompact(n: number): string — Intl compact notation (12.4K, 1.2M).
+   284→- formatDate(date, pattern?): string — date-fns format wrapper.
+   285→- PLATFORMS — re-exported from `@/lib/brand` for convenience.
+   286→
+   287→Conventions for later agents:
+   288→- Always wrap view content in a `<div className="space-y-6">` and start
+   289→  with `<PageHeader .../>`.
+   290→- Use `<SectionCard>` for grouped content rather than raw `<Card>`.
+   291→- Use `<StatCard>` for any KPI; pass `spark` whenever you have a
+   292→  timeseries.
+   293→- Use `<PostCard>` for any post row — it already wires Edit/Duplicate/
+   294→  Delete.
+   295→- Use `<EmptyState>` + `<SkeletonGrid>` (or shimmer divs) so loading
+   296→  and empty states stay consistent across views.
+   297→- Render notifications via `sonner`'s `toast` — do not introduce a
+   298→  second toast system.
+   299→- Read view from the store with `useApp((s) => s.view)` and switch with
+   300→  `setView`. Do NOT introduce a second router.
+   301→- Open the composer with `useApp((s) => s.openComposer)` (optionally
+   302→  with a post id for edit mode). Closing is automatic on submit/discard.
+   303→============================================================
+   304→
+   305→---
+   306→Task ID: 3-b
+   307→Agent: Staff Frontend Engineer (insights cluster)
+   308→Task: Replace three placeholder views with full, production-grade insights implementations — Analytics Overview (flagship), Reports & Exports, Audience Insights.
+   309→
+   310→Files replaced (only these; nothing else touched):
+   311→- src/components/dashboard/views/analytics.tsx — AnalyticsView
+   312→- src/components/dashboard/views/reports.tsx — ReportsView
+   313→- src/components/dashboard/views/audience.tsx — AudienceView
+   314→
+   315→Work Log:
+   316→- Read worklog Task 2-b in full to internalize the shared-primitives contract
+   317→  (PageHeader, StatCard, SectionCard, StatusBadge, PostCard, EmptyState,
+   318→  SkeletonGrid, Avatar, MiniSparkline, MiniArea, DonutChart, Toolbar,
+   319→  formatCompact, formatDate, PLATFORMS). Reused all of them; did not
+   320→  reinvent.
+   321→- Wrote `/agent-ctx/3-b-insights-views.md` to document scope, conventions,
+   322→  and the per-platform donut color map used in all three views.
+   323→- ANALYTICS (analytics.tsx):
+   324→  - Toolbar with `ToggleGroup type="single"` date-range segmented control
+   325→    (7/30/90d, default 30d), platform multi-select `Popover` (custom
+   326→    role="checkbox" rows with PlatformBadge), and an "Export CSV" button
+   327→    that fires a sonner toast.
+   328→  - Visible series sliced from `useAnalytics().timeseries` (last N points).
+   329→  - KPI row of 4 StatCards: Impressions / Reach / Engagement / Clicks —
+   330→    each with `formatCompact` value, delta % vs the previous equal-length
+   331→    window (half-slice comparison), and a 14-point MiniSparkline.
+   332→  - Main performance chart: SectionCard with metric toggle
+   333→    (Impressions / Reach / Engagement / Clicks) that switches the plotted
+   334→    AreaChart series. Custom `ChartTooltip` styled with popover tokens.
+   335→    X axis formatted dates with adaptive tickInterval; Y axis compact;
+   336→    subtle `CartesianGrid` (horizontal only).
+   337→  - Two-column row: left = Engagement-rate-trend AreaChart (engagement /
+   338→    reach * 100) with brand coral gradient; right = Impressions-by-platform
+   339→    `DonutChart` from `breakdown` with a legend listing platform +
+   340→    `formatCompact` value + share %.
+   341→  - Platform breakdown `Table` with sortable headers (Platform /
+   342→    Followers / Posts / Impressions / Eng. rate). Header sort button is
+   343→    a standalone component (lifted out of the parent so it isn't created
+   344→    during render — required to satisfy `react-hooks/static-components`).
+   345→    Impressions cell renders a subtle primary bar whose width is the
+   346→    relative share of the max. PlatformBadge in the first column.
+   347→  - Top performing posts list: top 6 published posts by
+   348→    `metrics.impressions` (sorted client-side), ranked 1..6, with
+   349→    truncated text, platform badges, date, impressions + engagement
+   350→    count + engagement rate. Row click → `useApp.getState().openComposer(post.id)`.
+   351→  - Loading skeletons for KPIs, charts, table, and top-posts list;
+   352→    EmptyState fallbacks when series/breakdown is empty.
+   353→  - Charts wrapped in fixed-height `ResponsiveContainer`; each has
+   354→    `role="img"` + `aria-label`. Responsive grid (2x2 KPIs on mobile,
+   355→    4 across on xl; two-column row collapses to single column on mobile).
+   356→- REPORTS (reports.tsx):
+   357→  - PageHeader with "New report" button (toast).
+   358→  - Report templates grid: 6 cards (Weekly Summary, Monthly Performance,
+   359→    Campaign Report, Audience Growth, Content Audit, Custom) — each with
+   360→    tinted icon swatch, title, description, cadence pill, and a
+   361→    "Generate" button. Clicking opens a `Dialog` with date-range radio
+   362→    group (7/30/90d), format radio group (PDF/CSV), channel badges, and
+   363→    a Generate confirm that fires a sonner toast.
+   364→  - Scheduled reports `Table`: 4 mock scheduled reports with name +
+   365→    format icon, cadence, recipient count + first email, last sent,
+   366→    next run, active `Switch` (toggles pause/resume toast), and an
+   367→    edit/remove `DropdownMenu`.
+   368→  - Recent reports `Table`: 5 generated report rows with template badge,
+   369→    generated date, author, size, and Eye (preview) + Download
+   370→    (toast) actions. Preview opens a `Dialog` showing a tasteful
+   371→    rendered report preview: 4 KPI cards, a 14-day mini AreaChart
+   372→    (impressions + reach with dual gradient fills), and a "Top
+   373→    performing posts" mini table.
+   374→  - Quick export `SectionCard`: three buttons (PDF / CSV / chart PNG),
+   375→    each fires a sonner toast.
+   376→  - Tips card with three CheckCircle2 bullets and a coming-next strip.
+   377→- AUDIENCE (audience.tsx):
+   378→  - KPI row of 4 StatCards: Total followers (sum from breakdown),
+   379→    New followers (delta over 30d from timeseries, with `+` prefix),
+   380→    Engagement rate (avg of breakdown.engagementRate), Profile visits
+   381→    (deterministic mock = followers * 0.084). Each card has a 14-point
+   382→    sparkline derived from the appropriate series.
+   383→  - Follower growth chart: `ComposedChart` with an `Area` (cumulative
+   384→    followers, primary teal gradient, left Y axis) + a `Line` overlay
+   385→    (new-followers-per-day derived pairwise, coral, right Y axis).
+   386→    Dual Y axes, custom tooltip with per-series formatters.
+   387→  - Audience-by-platform `DonutChart` from breakdown (followers) with
+   388→    a legend listing platform + compact value + share %.
+   389→  - Top locations card: bar list (US/UK/India/Germany/Brazil/Other)
+   390→    with MapPin icon and primary-tinted progress bars (Other is muted).
+   391→  - Age distribution card: horizontal recharts `BarChart` (layout
+   392→    vertical), 25–34 bucket highlighted in primary, others in mint;
+   393→    custom tooltip with % formatter; `role="img"` + aria-label.
+   394→  - Best time to post heatmap: 7 days x 12 two-hour-bucket grid with
+   395→    deterministic engagement score per cell (peak windows: weekday
+   396→    evenings, weekend midday). Cell background derived from
+   397→    `color-mix(in oklch, var(--primary) X%, transparent)` so it adapts
+   398→    to dark mode automatically. Day-row labels + hour-column labels,
+   399→    a "Less ↔ More" legend in the header, and a caption with an Info
+   400→    icon. Cells have `title` attr for hover tooltips and `sr-only`
+   401→    text for screen readers. Heatmap scrolls horizontally on mobile
+   402→    (`overflow-x-auto scrollbar-cadence`, `min-w-[640px]`).
+   403→  - Top interests card: tiered chip cloud (4 tiers by index) using
+   404→    brand accent tokens (primary / mint / coral / muted) — clicking a
+   405→    chip fires a sonner toast.
+   406→  - Coming-next card: affinity segments, sentiment, competitor
+   407→    benchmarks chips.
+   408→  - All mock-demographic cards explicitly labeled "Sample" with a
+   409→    Badge in the header so users know what's representative vs. real.
+   410→- Lint + dev server:
+   411→  - `bun run lint` on the three owned files: 0 errors, 0 warnings
+   412→    (verified with `npx eslint <files> --max-warnings=0`).
+   413→  - Two pre-existing lint issues fixed in-flight:
+   414→      1. analytics.tsx `SortHeader` was defined inside the parent
+   415→         component → moved out to module scope and given explicit
+   416→         `sortKey/sortDir/onToggle` props (fixes
+   417→         `react-hooks/static-components`).
+   418→      2. audience.tsx follower-growth `useMemo` reassigned a `prev`
+   419→         variable → rewrote with pairwise `series[i-1]` lookup
+   420→         (fixes `react-hooks/immutability`).
+   421→  - Replaced the nested `<button><Checkbox/></button>` in the platform
+   422→    filter with a single `<button role="checkbox">` and a styled
+   423→    `<span>` indicator — avoids invalid nested-interactive HTML and
+   424→    removes a now-unused `Checkbox` import.
+   425→  - Remaining `bun run lint` errors/warnings are all in files I do NOT
+   426→    own (`src/components/dashboard/composer.tsx` shell warning and
+   427→    `src/components/dashboard/views/composer.tsx` view errors) — left
+   428→    untouched per the scope rules; another agent owns those.
+   429→  - Dev server compiles cleanly; `GET /` returns HTTP 200.
+   430→
+   431→Stage Summary:
+   432→- The three insights views are now full, polished, accessible, dark-mode
+   433→  correct, responsive implementations. They reuse every shared primitive
+   434→  from Task 2-b, drive all data through `useAnalytics` / `usePosts`, fire
+   435→  `sonner` toasts on every action, and guard every chart with
+   436→  `EmptyState` fallbacks. Other agents can keep replacing the remaining
+   437→  placeholder views (calendar, queue, ai, inbox, settings, integrations,
+   438→  billing, team) without coordinating with this task.
+   439→
+   440→---
+   441→Task ID: 3-c
+   442→Agent: Staff Frontend Engineer (workspace & engagement cluster)
+   443→Task: Replace seven placeholder views with full, production-grade workspace & engagement implementations — Inbox, Media Library, AI Assistant (flagship), Settings, Integrations, Billing & Plan, Team & Permissions.
+   444→
+   445→Files replaced (only these seven; nothing else touched):
+   446→- src/components/dashboard/views/inbox.tsx — InboxView
+   447→- src/components/dashboard/views/media.tsx — MediaView
+   448→- src/components/dashboard/views/ai.tsx — AiView
+   449→- src/components/dashboard/views/settings.tsx — SettingsView
+   450→- src/components/dashboard/views/integrations.tsx — IntegrationsView
+   451→- src/components/dashboard/views/billing.tsx — BillingView
+   452→- src/components/dashboard/views/team.tsx — TeamView
+   453→
+   454→Work Log:
+   455→- Read worklog Tasks 2-b and 3-b in full to internalize the shared-primitives
+   456→  contract (PageHeader, StatCard, SectionCard, StatusBadge, PostCard,
+   457→  EmptyState, SkeletonGrid, Avatar, MiniSparkline, MiniArea, DonutChart,
+   458→  Toolbar, formatCompact, formatDate, PLATFORMS) and the per-cluster
+   459→  conventions established by 3-b (lift sort headers out of parents to satisfy
+   460→  `react-hooks/static-components`; use `button[role="checkbox"]` instead of
+   461→  nested `<button><Checkbox/></button>`; gate framer-motion with
+   462→  `useReducedMotion`; reuse `role="img"` + `aria-label` on every chart).
+   463→- Reused all shared primitives; did not reinvent. All toasts go through
+   464→  `sonner`'s `toast`. All mutations flow through `@/hooks/use-api.ts`. No view
+   465→  imports mock data directly except `PRICING` from `@/lib/data/mock` (billing
+   466→  plan comparison) and decorative constants in `team.tsx` (roles × permissions
+   467→  matrix).
+   468→- Wrote/updated `/home/z/my-project/agent-ctx/3-c-workspace-cluster.md` to
+   469→  document the cluster scope, conventions introduced here, and verification.
+   470→
+   471→INBOX (inbox.tsx, 771 lines):
+   472→- PageHeader with "Mark all resolved" button (toast). StatsStrip of 4 StatCards
+   473→  (Open / Pending / Resolved counts + mock Avg response time with delta).
+   474→- Toolbar: type segmented control (All/Comments/Mentions/DMs/Reviews) as a
+   475→  pill toggle group, a `PlatformMultiSelect` Popover (custom button rows with
+   476→  `role="checkbox"` and PlatformBadge), a status `DropdownMenu`, and a search
+   477→  Input. All filter state in React; derived `filtered` memoized.
+   478→- Two-pane layout: `lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]`. Left list is
+   479→  `role="listbox"` of `InboxListItem` (memoized) button rows showing Avatar,
+   480→  PlatformBadge, author, handle, snippet, relative time (formatDistanceToNow),
+   481→  status dot, type badge, selected highlight bar + `aria-selected`. List has
+   482→  keyboard nav (↑↓ + Enter) via a window keydown listener that ignores
+   483→  inputs/textareas. Right `DetailPanel` shows full message + thread mock for
+   484→  comments (original post card above), Avatar + platform context, reply Textarea
+   485→  with "Send reply" (toast), Resolve/Mark pending (useResolveInbox → toast),
+   486→  decorative Assign dropdown + Snooze + char counter. On mobile the detail
+   487→  becomes a right-side `Sheet`. Loading skeletons (shimmer list rows) +
+   488→  EmptyState fallback + Reset filters CTA.
+   489→
+   490→MEDIA (media.tsx, 1089 lines):
+   491→- PageHeader with "Upload" button. Stats row of 4 StatCards (Total assets,
+   492→  Library size, Images, Videos) with `formatSize` helper for KB/MB display.
+   493→- Toolbar: type segmented control (All/Images/Videos), search Input, sort
+   494→  Select (Newest/Name/Size), grid/list view toggle. Tag chip row below toolbar
+   495→  (All + one chip per unique tag).
+   496→- `UploadDialog` with a styled drag-drop zone (`role="button"`, tabIndex=0,
+   497→  onDragOver/onDrop wired) + name input + type Select + "Add to library"
+   498→  button. Submit calls a small `createMediaAsset` helper that POSTs `{name,
+   499→  type, url, thumbnailUrl, width, height, sizeKb, tags}` to `/api/media`, then
+   500→  invalidates the `media` query via `useQueryClient` and toasts.
+   501→- Grid view: responsive `sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5` of
+   502→  `MediaCard` (memoized) — image thumbnail (`<img loading="lazy">`), video
+   503→  play badge, hover overlay with quick "Preview", type badge, name, dimensions,
+   504→  size, tag chips, top-left Checkbox for selection, top-right kebab CardMenu
+   505→  (Use in post → openComposer, Preview, Copy URL → toast, Download → toast,
+   506→  Delete → optimistic + toast).
+   507→- List view: shadcn `Table` (Thumbnail | Name | Type | Dimensions | Size |
+   508→  Tags | Date | actions). Header checkbox selects all.
+   509→- Selection mode: sticky bottom action bar (`fixed inset-x-0 bottom-4
+   510→  max-w-2xl`) with "Use in post", "Add tags", "Delete (N)" + clear button.
+   511→  Bar animates in/out via AnimatePresence.
+   512→- `DetailDialog`: large preview + metadata grid (Type/Dimensions/Size/Added) +
+   513→  decorative tags editor + "Edit details" + "Use in post" (openComposer).
+   514→- Loading skeletons (shimmer image cards) + EmptyState fallback.
+   515→
+   516→AI (ai.tsx, 790 lines) — flagship AI feature:
+   517→- 3-column desktop layout `lg:grid-cols-[260px_minmax(0,1fr)_320px]`:
+   518→  - Left: `ChatSidebar` with 4 mock past conversations + pro tip card.
+   519→  - Center: chat thread SectionCard. Empty state has the gradient AI avatar,
+   520→    "How can I help you create today?" headline, and 4 suggestion chips (Draft
+   521→    IG captions / Suggest content calendar / Rewrite caption / Best time to
+   522→    post on LinkedIn). Clicking a chip fills + sends.
+   523→  - Right: `CaptionGenerator` mini-tool (topic input, platform multi-select
+   524→    chips, tone Select, "Generate 3 captions" → `useGenerateCaptions` → 3
+   525→    caption cards each with Copy (clipboard + toast) and "Use in composer"
+   526→    → openComposer + toast).
+   527→- Chat thread: user messages right-aligned with `Avatar` + primary bubble;
+   528→  assistant left-aligned with a gradient AI avatar (Sparkles in a
+   529→  from-primary→mint→coral circle). Assistant content rendered with
+   530→  `react-markdown` (custom components for p/ul/ol/li/strong/em/code/pre/h1/h2/
+   531→  h3/a). Each assistant message has Copy + Use in post footer actions.
+   532→- `TypingBubble` shows animated dots (CSS keyframes) while `useAiChat` is
+   533→  pending.
+   534→- Input: auto-grow Textarea (height clamped to 200px) + Send button. Enter to
+   535→  send, Shift+Enter for newline. Last ~8 turns passed as `history` to
+   536→  `useAiChat`. State persisted to `localStorage["cadence.ai.chat"]` and
+   537→  restored on mount. "New chat" clears messages + input.
+   538→- Accessibility: `<section aria-label="AI chat">`, Textarea has
+   539→  `aria-label`, a `sr-only` live region announces new assistant replies,
+   540→  send button disabled while pending or empty.
+   541→- Responsive: sidebar collapses to a left `Sheet` ("Chats" button in header),
+   542→  right rail collapses to a `Tabs`-based mobile section ("Chat" / "AI tools").
+   543→
+   544→SETTINGS (settings.tsx, 1051 lines):
+   545→- shadcn `<Tabs>` with vertical TabsList on `lg+` (`lg:flex-row` wrapper +
+   546→  `lg:w-60 lg:self-stretch`) and horizontal on mobile. 7 tabs: Profile,
+   547→  Workspace, Notifications, Appearance, Security, Billing (pointer to billing
+   548→  view), Danger zone.
+   549→- Profile: react-hook-form + zod schema (name min 2, email valid, bio max
+   550→  280). Avatar with decorative "Change"/"Remove", name/email inputs, bio
+   551→  Textarea, timezone Select (7 zones). Save → toast.
+   552→- Workspace: workspace name input, slug input + "Check" button (decorative
+   553→  availability check with simulated latency + toast), default timezone Select,
+   554→  week-starts-on Select, decorative logo upload row. Save → toast.
+   555→- Notifications: 4 groups (Publishing, Engagement, Reports, Team) each with
+   556→  label + description + `Switch` toggles. State in a flat Record. Save → toast.
+   557→- Appearance: theme select (Light/Dark/System) wired to `useTheme().setTheme`
+   558→  (hydration-safe via `mounted` flag), 5 accent color swatches (decorative),
+   559→  density Comfortable/Compact, reduced-motion Switch (decorative). Save → toast.
+   560→- Security: change-password form (3 fields, zod schema with refine for
+   561→  match), 2FA Switch (decorative), active sessions list (2 mock devices with
+   562→  "Revoke" — current device labeled), API tokens `Table` (mock 2 tokens, create
+   563→  adds a new row + toast, revoke removes + toast).
+   564→- Danger zone: red "Delete workspace" with `AlertDialog` requiring typed
+   565→  confirmation "delete my workspace" before the destructive action fires.
+   566→  Plus an "Export data" row.
+   567→
+   568→INTEGRATIONS (integrations.tsx, 581 lines):
+   569→- PageHeader with "Browse all" button (toast).
+   570→- Connected summary strip (SectionCard): count badge + grid of motion.button
+   571→  cards for every connected integration, each opening the Configure dialog.
+   572→  Empty state when none connected.
+   573→- Toolbar: search Input + category chip filter (All/Design/Productivity/
+   574→  Storage/Automation/Communication/Commerce/Analytics).
+   575→- Grid (`sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`) of `IntegrationCard`:
+   576→  `LogoTile` (gradient initials in `integration.accent` tinted square), name +
+   577→  category badge, description (line-clamp-2), connection status dot + label
+   578→  (mint=Connected / muted=Not connected), "Configure" button (only when
+   579→  connected) + "Connect"/"Disconnect" button → `useToggleIntegration(id)` with
+   580→  pending state + toast.
+   581→- `ConfigureDialog`: auto-sync Switch, notify Switch, account Select (decorative),
+   582→  Save → toast.
+   583→- Bottom CTA SectionCard: "Request an integration" with popular-request chips
+   584→  (Mastodon/Bluesky/Linear/Airtable/Asana/Webflow) that toast on click +
+   585→  "Browse all" + "Request integration" buttons.
+   586→- Loading skeletons + EmptyState fallback.
+   587→
+   588→BILLING (billing.tsx, 683 lines):
+   589→- PageHeader with "Export" + "Upgrade" (opens PlanComparison dialog).
+   590→- Two-column row: Current plan SectionCard (plan name "Team", price, seats
+   591→  "5 of 8 used", renewal "Jun 1, 2025", billing cycle, next invoice $90,
+   592→  Manage plan / Switch to annual / Cancel plan buttons) + Usage SectionCard
+   593→  with 3 `UsageMeter` cards (Posts this month / Media storage / AI credits)
+   594→  each with Progress bar (`shadcn/ui/progress`), `MiniSparkline`, % used +
+   595→  remaining label, amber "Near limit" badge when ≥80%.
+   596→- Usage breakdown: 4 StatCards (Posts scheduled / Posts published / AI
+   597→  captions generated / Media uploaded) each with sparkline + deltaLabel.
+   598→- Two-column row: Payment method SectionCard (Visa ending 4242 + expiry +
+   599→  "Update" → PaymentDialog, amber expiry warning, billing email, Tax ID) +
+   600→  Invoices Table (4 paid + 1 upcoming, FileText icon, amount, status badge,
+   601→  download icon → toast) with "Download all" header action.
+   602→- Billing activity SectionCard: 3 timeline rows (payment succeeded, card
+   603→  expiring, AI credit usage) with tinted icon swatches + dates.
+   604→- `PlanComparison` Dialog: 3-tier grid from `PRICING`, current plan
+   605→  highlighted/disabled, "Change to {plan}" → toast. `PaymentDialog`: card
+   606→  form (name/number/expiry/CVC/ZIP) → toast on save.
+   607→
+   608→TEAM (team.tsx, 808 lines):
+   609→- PageHeader with "Invite member" button → `InviteDialog` (name + email +
+   610→  role Select Owner/Admin/Editor/Approver/Viewer, email regex validation,
+   611→  `useInviteMember` mutation → toast + close + table refresh via React Query
+   612→  invalidation).
+   613→- Stats: 4 StatCards (Total members / Active / Pending invites / Seats used
+   614→  out of SEAT_LIMIT=8) with deltaLabels.
+   615→- Toolbar with seat count + "Export" (toast) + "Invite member".
+   616→- Roster SectionCard (bodyClassName="p-0") with `RosterTable`: columns
+   617→  Avatar+Name (with Crown icon for Owner), Email, Role badge (color-coded per
+   618→  role), Status badge (active=green / invited=amber / suspended=red), Last
+   619→  active (formatDistanceToNow), `RowActions` kebab menu with Change role
+   620→  `DropdownMenuSub`, Resend invite (when invited), Suspend access, Remove
+   621→  from team (`AlertDialog` confirm). Remove is optimistic (hidden Set) +
+   622→  toast.
+   623→- Pending invites sub-section (only when any invited members): Table with
+   624→  Name/Email/Role/Status + Resend button.
+   625→- Two-column row: `PermissionsMatrix` SectionCard (sticky-left-column Table
+   626→  of 8 permissions × 5 roles with check/x icons + sr-only labels; horizontally
+   627→  scrollable on mobile) + `TeamActivity` SectionCard (filtered activity feed
+   628→  showing invite/approve events from `useActivity`, each row a tinted icon +
+   629→  actor/action/target + relative time).
+   630→- Loading skeletons (5 shimmer rows) + EmptyState fallback.
+   631→
+   632→Quality bar (all 7 views):
+   633→- Fully responsive (mobile/tablet/desktop/ultra-wide). No horizontal overflow
+   634→  except intentional scroll areas with `.scrollbar-cadence` (e.g. permissions
+   635→  matrix, inbox list, AI tools rail).
+   636→- Accessible: semantic landmarks (`section`, `aside`, `ol`), ARIA
+   637→  (`role="listbox"`/`role="option"`, `aria-selected`, `aria-pressed`,
+   638→  `aria-label`, `aria-live` for AI replies), keyboard operable (↑↓ Enter on
+   639→  inbox list, Enter/Shift+Enter in AI composer, focus rings everywhere),
+   640→  alt text on all `<img>` (`asset.name` / `asset.name`), charts have
+   641→  `role="img"` + `aria-label` where applicable, color is never the only
+   642→  signal (status badges combine dot+label+badge).
+   643→- Dark mode flawless: every color is a semantic token (`bg-card`,
+   644→  `text-foreground`, `text-muted-foreground`, `border-border`, `bg-accent`)
+   645→  or a brand accent token (`text-coral`, `text-mint`, `text-amber-brand`,
+   646→  `text-plum`). Decorative gradients (AI avatar, plan tile, payment icon,
+   647→  logo tile) are the only intentional exceptions.
+   648→- `sonner` toast on every mutation/action (resolve, reply, upload, delete,
+   649→  connect/disconnect, configure, invite, role change, password update, plan
+   650→  switch, payment save, download, etc.).
+   651→- Loading skeletons + EmptyState everywhere (inbox list, media grid/table,
+   652→  integrations grid + connected strip, team roster).
+   653→- `date-fns` for dates (`format`, `formatDistanceToNow`); `formatCompact`
+   654→  for big numbers (billing usage, stats).
+   655→- Memoization where helpful: `InboxListItem`, `MediaCard`, plus `useMemo`
+   656→  for derived lists/counts in every view.
+   657→- All `<img>` use `loading="lazy"`.
+   658→
+   659→Lint + dev server:
+   660→- `npx eslint <all 7 owned files> --max-warnings=0` → 0 errors, 0 warnings.
+   661→- `bun run lint` (whole project) → 0 errors, 1 pre-existing warning from
+   662→  `src/components/dashboard/composer.tsx` (react-hook-form `watch()` API
+   663→  incompatibility, outside this task's scope — owned by Task 2-b).
+   664→- Dev server compiles cleanly; `GET /` returns HTTP 200. The only entry in
+   665→  `dev.log` is `EADDRINUSE :::3000` from a duplicate dev-server start attempt
+   666→  (the system-managed server is already running on 3000) — not an app error.
+   667→- Exported view component names match the `VIEW_COMPONENTS` record in
+   668→  `src/components/dashboard/dashboard-app.tsx` (InboxView, MediaView, AiView,
+   669→  SettingsView, IntegrationsView, BillingView, TeamView) — no shell changes
+   670→  were needed.
+   671→
+   672→Stage Summary:
+   673→- All seven workspace & engagement views are now full, polished, accessible,
+   674→  dark-mode-correct, responsive implementations. They reuse every shared
+   675→  primitive from Task 2-b, drive all data through the React Query hooks, fire
+   676→  `sonner` toasts on every action, and guard every list with `EmptyState` +
+   677→  shimmer skeletons. Combined with 3-a (publishing cluster: calendar, queue,
+   678→  composer) and 3-b (insights cluster: analytics, reports, audience), the
+   679→  dashboard now has all 13 views fully built out — no `_placeholder.tsx`
+   680→  view components are referenced by the live router.
+   681→
+   682→---
+   683→Task ID: 3-c
+   684→Agent: Principal Architect (main, direct build after subagent rate-limit)
+   685→Task: Build the workspace & engagement cluster — replace 7 placeholder views with full implementations (inbox, media, ai, settings, integrations, billing, team).
+   686→
+   687→Work Log:
+   688→- Read worklog + shared.tsx to confirm the shared-primitives contract (PageHeader, StatCard, SectionCard, Avatar, EmptyState, SkeletonGrid, Toolbar, MiniSparkline, DonutChart, formatCompact, formatDate) and the required named exports per dashboard-app.tsx (InboxView, MediaView, AiView, SettingsView, IntegrationsView, BillingView, TeamView).
+   689→- integrations.tsx — category Tabs filter + search + grid of integration cards (gradient logo tiles, connect/disconnect via useToggleIntegration, connected strip, configure Dialog with Switch toggles + account Select, stats, request-integration CTA).
+   690→- team.tsx — roster Table (Avatar+name/email, role badge w/ icon, status badge, last-active, kebab menu w/ Change-role submenu + Resend invite + Remove confirm Dialog), invite Dialog (name/email/role → useInviteMember), permissions matrix Table (role × permission check/x), stats (total/active/pending/seats).
+   691→- billing.tsx — current plan card (Team, $18, seats, renews) + usage meters (Progress for posts/storage/AI credits), plan-comparison Dialog (PRICING, monthly/annual toggle, 20% off), payment method, invoices Table (download), billing details, export button.
+   692→- settings.tsx — vertical Tabs (Profile/Workspace/Notifications/Appearance/Security/Danger). Profile: react-hook-form+zod, avatar, name/email/bio/timezone. Workspace: name/slug/timezone/week-starts/logo. Notifications: grouped Switch toggles. Appearance: theme (Light/Dark/System wired to useTheme), accent swatches, density, reduced-motion. Security: password change (zod+confirm), 2FA toggle, active sessions, API tokens. Danger: delete workspace with typed "DELETE" confirm.
+   693→- inbox.tsx — two-pane: list (filter by type Tabs, status, platform Popover multi-select, search) + detail panel (thread context for comments, reply Textarea w/ Enter-to-send, Resolve/Pending/Snooze/Assign actions via useResolveInbox). Stats strip (open/pending/resolved/avg response).
+   694→- media.tsx — grid + list views, type Tabs, tag chips, sort, multi-select with sticky action bar (Use in post / Add tags / Delete), upload Dialog (drag-drop styled + name/type form), detail Dialog (large preview + tags + Copy URL/Use in post), per-card kebab (Use/View/Copy/Download/Delete), stats (total/images/videos/storage).
+   695→- ai.tsx — full chat interface: conversation sidebar (recent + sample chats, New chat, delete, localStorage persistence key cadence.ai.chat), message bubbles (user right + Avatar, assistant left with gradient Bot avatar + react-markdown rendering, Copy/Use-in-composer on hover), typing indicator, auto-grow Textarea (Enter to send / Shift+Enter newline), empty state with 4 suggestion prompt cards, Caption generator tool (topic/tone/platforms → useGenerateCaptions → 3 caption chips with Copy/Use). Mobile sidebar via Sheet.
+   696→
+   697→Stage Summary:
+   698→- All 7 workspace/engagement views are full implementations. Every dashboard view (14 total) is now complete.
+   699→- Data flows through React Query hooks (useInbox, useResolveInbox, useMedia, useTeam, useInviteMember, useIntegrations, useToggleIntegration, useAiChat, useGenerateCaptions). AI chat/captions hit the live z-ai-web-dev-sdk backend with graceful fallbacks.
+   700→- Lint: 0 errors, 1 pre-existing warning (shell composer.tsx react-hook-form — Task 2-b's file, untouched). Dev log: all API routes 200, no runtime errors.
+   701→- Conventions followed: PageHeader at top of every view, SectionCard for grouping, StatCard for KPIs, Avatar for people, EmptyState + SkeletonGrid for loading/empty, sonner toast on all mutations, date-fns for dates, fully responsive + dark-mode + accessible.
+   702→============================================================
+   703→

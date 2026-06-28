@@ -38,7 +38,6 @@ export function Channels() {
               <button
                 type="button"
                 tabIndex={0}
-                aria-label={`Connect ${p.name}`}
                 className={cn(
                   "group flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 text-left",
                   "shadow-sm transition-all duration-300",

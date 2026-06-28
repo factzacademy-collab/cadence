@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
-  const posts = store.listPosts({
+  const posts = await store.listPosts({
     status: sp.get("status") ?? undefined,
     platform: (sp.get("platform") as PlatformId) ?? undefined,
     from: sp.get("from") ?? undefined,
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (!body?.text || typeof body.text !== "string") {
     return NextResponse.json({ error: "Text is required" }, { status: 400 });
   }
-  const post = store.createPost({
+  const post = await store.createPost({
     text: body.text,
     scheduledAt: body.scheduledAt,
     status: body.status,

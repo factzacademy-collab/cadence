@@ -33,6 +33,7 @@ export function Testimonials() {
           <div className="mt-5 flex items-center justify-center gap-3">
             <div
               className="flex items-center gap-0.5"
+              role="img"
               aria-label="Rated 4.9 out of 5 stars"
             >
               {Array.from({ length: 5 }).map((_, i) => (

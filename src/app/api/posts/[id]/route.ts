@@ -9,7 +9,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  const post = store.updatePost(id, body);
+  const post = await store.updatePost(id, body);
   if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ post });
 }
@@ -19,6 +19,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const ok = store.deletePost(id);
+  const ok = await store.deletePost(id);
   return NextResponse.json({ ok });
 }

@@ -35,6 +35,11 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: `${BRAND.name} Team` }],
   creator: BRAND.name,
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+  },
+  manifest: undefined,
   openGraph: {
     type: "website",
     locale: "en_US",

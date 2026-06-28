@@ -3,5 +3,5 @@ import { store } from "@/lib/data/store";
 
 export const dynamic = "force-dynamic";
 export async function GET() {
-  return NextResponse.json({ accounts: store.accounts });
+  return NextResponse.json({ accounts: await store.listAccounts() });
 }

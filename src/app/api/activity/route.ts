@@ -3,5 +3,9 @@ import { store } from "@/lib/data/store";
 
 export const dynamic = "force-dynamic";
 export async function GET() {
-  return NextResponse.json({ activity: store.activity, campaigns: store.campaigns });
+  const [activity, campaigns] = await Promise.all([
+    store.listActivity(),
+    store.listCampaigns(),
+  ]);
+  return NextResponse.json({ activity, campaigns });
 }
