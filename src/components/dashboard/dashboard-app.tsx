@@ -24,6 +24,8 @@ import { SettingsView } from "@/components/dashboard/views/settings";
 import { IntegrationsView } from "@/components/dashboard/views/integrations";
 import { BillingView } from "@/components/dashboard/views/billing";
 import { TeamView } from "@/components/dashboard/views/team";
+import { TemplatesView } from "@/components/dashboard/views/templates";
+import { NotificationsView } from "@/components/dashboard/views/notifications";
 
 const VIEW_COMPONENTS = {
   overview: OverviewView,
@@ -40,6 +42,8 @@ const VIEW_COMPONENTS = {
   integrations: IntegrationsView,
   billing: BillingView,
   team: TeamView,
+  templates: TemplatesView,
+  notifications: NotificationsView,
 } as const;
 
 function isTypingTarget(el: EventTarget | null): boolean {

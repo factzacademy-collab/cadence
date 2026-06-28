@@ -349,15 +349,23 @@ class Store {
       lastActive: new Date().toISOString(),
       status: "invited",
     };
+    let workspaceName = "Cadence HQ";
     try {
       const workspace = await db.workspace.findFirst();
       if (!workspace) throw new Error("No workspace found");
+      workspaceName = workspace.name;
       await db.teamMember.create({
         data: { workspaceId: workspace.id, name, email, role, avatarColor: m.avatarColor, status: "invited" },
       });
     } catch (e) { console.error("[store.inviteMember] DB write failed:", e); }
     this.team.push(m);
     await this.logActivity("Maya Okafor", "invited", name, "invite");
+    // Fire-and-forget invite email (mock mode logs to console).
+    import("@/lib/email").then(({ sendEmail, inviteEmail }) => {
+      const mail = inviteEmail(workspaceName, "Maya Okafor");
+      mail.to = email;
+      return sendEmail(mail);
+    }).catch((e) => console.error("[store.inviteMember] email failed:", e));
     return m;
   }
 

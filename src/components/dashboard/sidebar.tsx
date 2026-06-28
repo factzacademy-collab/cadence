@@ -24,6 +24,8 @@ import {
   Sun,
   Plus,
   ExternalLink,
+  LayoutTemplate,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -75,6 +77,7 @@ const NAV_GROUPS: NavGroup[] = [
       { view: "calendar", label: "Calendar", icon: CalendarDays },
       { view: "queue", label: "Queue", icon: ListChecks },
       { view: "composer", label: "Composer", icon: PenSquare },
+      { view: "templates", label: "Templates", icon: LayoutTemplate },
     ],
   },
   {
@@ -99,6 +102,7 @@ const NAV_GROUPS: NavGroup[] = [
       { view: "team", label: "Team", icon: UserCog },
       { view: "integrations", label: "Integrations", icon: Plug },
       { view: "billing", label: "Billing", icon: CreditCard },
+      { view: "notifications", label: "Notifications", icon: Bell },
       { view: "settings", label: "Settings", icon: SettingsIcon },
     ],
   },

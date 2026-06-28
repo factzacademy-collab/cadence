@@ -21,6 +21,8 @@ import {
   ExternalLink,
   Search,
   CornerDownLeft,
+  LayoutTemplate,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -53,6 +55,8 @@ const NAV_ITEMS: { view: AppView; label: string; icon: LucideIcon }[] = [
   { view: "team", label: "Team", icon: UserCog },
   { view: "integrations", label: "Integrations", icon: Plug },
   { view: "billing", label: "Billing", icon: CreditCard },
+  { view: "templates", label: "Templates", icon: LayoutTemplate },
+  { view: "notifications", label: "Notifications", icon: Bell },
   { view: "settings", label: "Settings", icon: SettingsIcon },
 ];
 

@@ -276,6 +276,7 @@ function PlanDialog({
   setCycle: (c: "monthly" | "annual") => void;
   onClose: () => void;
 }) {
+  const [upgrading, setUpgrading] = React.useState<string | null>(null);
   return (
     <DialogContent className="sm:max-w-2xl">
       <DialogHeader>
@@ -339,13 +340,36 @@ function PlanDialog({
                 size="sm"
                 variant={p.highlight ? "outline" : "default"}
                 className="mt-4"
-                disabled={p.highlight}
-                onClick={() => {
-                  toast.success(`Switched to ${p.name} (${cycle})`);
-                  onClose();
+                disabled={p.highlight || upgrading === p.id}
+                onClick={async () => {
+                  if (p.id === "free") {
+                    toast.info("Contact sales to downgrade");
+                    onClose();
+                    return;
+                  }
+                  setUpgrading(p.id);
+                  try {
+                    const res = await fetch("/api/billing/checkout", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ plan: p.id, cycle, seats: 6 }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                      toast.error(data.error ?? "Checkout failed");
+                    } else if (data.url) {
+                      toast.success("Redirecting to checkout…");
+                      window.location.href = data.url;
+                    }
+                  } catch {
+                    toast.error("Checkout failed");
+                  } finally {
+                    setUpgrading(null);
+                    onClose();
+                  }
                 }}
               >
-                {p.highlight ? "Current plan" : `Switch to ${p.name}`}
+                {upgrading === p.id ? "Redirecting…" : p.highlight ? "Current plan" : `Switch to ${p.name}`}
               </Button>
             </div>
           );

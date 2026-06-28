@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { store } from "@/lib/data/store";
 import type { PlatformId } from "@/lib/brand";
+import { requireAuth, requirePermission, isAuthorized } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const ctx = await requireAuth();
+  if (!isAuthorized(ctx)) return ctx;
   const sp = req.nextUrl.searchParams;
   const posts = await store.listPosts({
     status: sp.get("status") ?? undefined,
@@ -16,6 +19,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const ctx = await requirePermission("create_posts");
+  if (!isAuthorized(ctx)) return ctx;
   const body = await req.json().catch(() => ({}));
   if (!body?.text || typeof body.text !== "string") {
     return NextResponse.json({ error: "Text is required" }, { status: 400 });

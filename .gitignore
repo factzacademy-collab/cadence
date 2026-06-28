@@ -55,3 +55,10 @@ server.log
 # database (sqlite)
 /db/*.db
 /db/*.db-journal
+
+# test results
+/test-results/
+/playwright-report/
+
+# tool results (agent scratch)
+/tool-results/

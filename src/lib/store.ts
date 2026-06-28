@@ -16,7 +16,9 @@ export type AppView =
   | "settings"
   | "integrations"
   | "billing"
-  | "team";
+  | "team"
+  | "templates"
+  | "notifications";
 
 export type Route = "marketing" | "app";
 
@@ -74,6 +76,7 @@ export function readStateFromHash(): { route: Route; view: AppView } | null {
     const valid: AppView[] = [
       "overview", "calendar", "composer", "queue", "analytics", "reports",
       "audience", "media", "ai", "inbox", "settings", "integrations", "billing", "team",
+      "templates", "notifications",
     ];
     return { route: "app", view: (valid as string[]).includes(v) ? (v as AppView) : "overview" };
   }

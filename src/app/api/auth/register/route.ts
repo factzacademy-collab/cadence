@@ -51,6 +51,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Send a welcome email (mock mode logs to console if no provider key).
+    const { sendEmail, welcomeEmail } = await import("@/lib/email");
+    const email = welcomeEmail(name);
+    email.to = normalizedEmail;
+    sendEmail(email).catch((e) => console.error("[register] welcome email failed:", e));
+
     return NextResponse.json({
       ok: true,
       userId: user.id,

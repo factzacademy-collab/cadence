@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { store } from "@/lib/data/store";
+import { requireAuth, requirePermission, isAuthorized } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const ctx = await requirePermission("edit_calendar");
+  if (!isAuthorized(ctx)) return ctx;
   const body = await req.json().catch(() => ({}));
   const post = await store.updatePost(id, body);
   if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -19,6 +22,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const ctx = await requirePermission("edit_calendar");
+  if (!isAuthorized(ctx)) return ctx;
   const ok = await store.deletePost(id);
   return NextResponse.json({ ok });
 }
