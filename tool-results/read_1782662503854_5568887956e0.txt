@@ -1,0 +1,772 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import * as React from "react";
+     4→     4→import { formatDistanceToNow } from "date-fns";
+     5→     5→import { AnimatePresence, motion } from "framer-motion";
+     6→     6→import {
+     7→     7→  AtSign,
+     8→     8→  CheckCheck,
+     9→     9→  CheckCircle2,
+    10→    10→  Clock3,
+    11→    11→  CornerUpLeft,
+    12→    12→  Filter,
+    13→    13→  Hash,
+    14→    14→  Inbox as InboxIcon,
+    15→    15→  MessageCircle,
+    16→    16→  Reply,
+    17→    17→  Search,
+    18→    18→  Send,
+    19→    19→  Star,
+    20→    20→  UserCheck,
+    21→    21→  X,
+    22→    22→} from "lucide-react";
+    23→    23→import { toast } from "sonner";
+    24→    24→
+    25→    25→import { cn } from "@/lib/utils";
+    26→    26→import { useInbox, useResolveInbox } from "@/hooks/use-api";
+    27→    27→import { PLATFORMS, type PlatformId } from "@/lib/brand";
+    28→    28→import { PlatformBadge } from "@/components/brand/platform-icon";
+    29→    29→import type { InboxItem } from "@/lib/types";
+    30→    30→import { Button } from "@/components/ui/button";
+    31→    31→import { Input } from "@/components/ui/input";
+    32→    32→import { Badge } from "@/components/ui/badge";
+    33→    33→import { Skeleton } from "@/components/ui/skeleton";
+    34→    34→import { Textarea } from "@/components/ui/textarea";
+    35→    35→import {
+    36→    36→  Popover,
+    37→    37→  PopoverContent,
+    38→    38→  PopoverTrigger,
+    39→    39→} from "@/components/ui/popover";
+    40→    40→import {
+    41→    41→  DropdownMenu,
+    42→    42→  DropdownMenuContent,
+    43→    43→  DropdownMenuItem,
+    44→    44→  DropdownMenuLabel,
+    45→    45→  DropdownMenuSeparator,
+    46→    46→  DropdownMenuTrigger,
+    47→    47→} from "@/components/ui/dropdown-menu";
+    48→    48→import {
+    49→    49→  Sheet,
+    50→    50→  SheetContent,
+    51→    51→  SheetHeader,
+    52→    52→  SheetTitle,
+    53→    53→  SheetDescription,
+    54→    54→} from "@/components/ui/sheet";
+    55→    55→import {
+    56→    56→  Avatar,
+    57→    57→  EmptyState,
+    58→    58→  PageHeader,
+    59→    59→  SectionCard,
+    60→    60→  StatCard,
+    61→    61→  Toolbar,
+    62→    62→} from "@/components/dashboard/shared";
+    63→    63→
+    64→    64→/* ------------------------------------------------------------------ */
+    65→    65→/* Constants & helpers                                                */
+    66→    66→/* ------------------------------------------------------------------ */
+    67→    67→
+    68→    68→type TypeFilter = "all" | "comment" | "mention" | "dm" | "review";
+    69→    69→type StatusFilter = "all" | "open" | "pending" | "resolved";
+    70→    70→
+    71→    71→const TYPE_OPTIONS: { key: TypeFilter; label: string; icon: typeof Hash }[] = [
+    72→    72→  { key: "all", label: "All", icon: InboxIcon },
+    73→    73→  { key: "comment", label: "Comments", icon: MessageCircle },
+    74→    74→  { key: "mention", label: "Mentions", icon: AtSign },
+    75→    75→  { key: "dm", label: "DMs", icon: Hash },
+    76→    76→  { key: "review", label: "Reviews", icon: Star },
+    77→    77→];
+    78→    78→
+    79→    79→const STATUS_OPTIONS: { key: StatusFilter; label: string }[] = [
+    80→    80→  { key: "all", label: "All statuses" },
+    81→    81→  { key: "open", label: "Open" },
+    82→    82→  { key: "pending", label: "Pending" },
+    83→    83→  { key: "resolved", label: "Resolved" },
+    84→    84→];
+    85→    85→
+    86→    86→const STATUS_DOT: Record<InboxItem["status"], string> = {
+    87→    87→  open: "bg-primary",
+    88→    88→  pending: "bg-amber-brand",
+    89→    89→  resolved: "bg-mint",
+    90→    90→};
+    91→    91→
+    92→    92→const TYPE_LABEL: Record<InboxItem["type"], string> = {
+    93→    93→  comment: "Comment",
+    94→    94→  mention: "Mention",
+    95→    95→  dm: "Direct message",
+    96→    96→  review: "Review",
+    97→    97→};
+    98→    98→
+    99→    99→/* ------------------------------------------------------------------ */
+   100→   100→/* Platform multi-select popover                                      */
+   101→   101→/* ------------------------------------------------------------------ */
+   102→   102→
+   103→   103→function PlatformMultiSelect({
+   104→   104→  selected,
+   105→   105→  onChange,
+   106→   106→}: {
+   107→   107→  selected: PlatformId[];
+   108→   108→  onChange: (next: PlatformId[]) => void;
+   109→   109→}) {
+   110→   110→  const [open, setOpen] = React.useState(false);
+   111→   111→  const toggle = (p: PlatformId) =>
+   112→   112→    onChange(
+   113→   113→      selected.includes(p)
+   114→   114→        ? selected.filter((x) => x !== p)
+   115→   115→        : [...selected, p]
+   116→   116→    );
+   117→   117→  const label =
+   118→   118→    selected.length === 0
+   119→   119→      ? "All platforms"
+   120→   120→      : selected.length === 1
+   121→   121→        ? PLATFORMS[selected[0]].name
+   122→   122→        : `${selected.length} platforms`;
+   123→   123→
+   124→   124→  return (
+   125→   125→    <Popover open={open} onOpenChange={setOpen}>
+   126→   126→      <PopoverTrigger asChild>
+   127→   127→        <Button variant="outline" size="sm" className="h-8 gap-1.5">
+   128→   128→          <Filter className="size-3.5" />
+   129→   129→          {label}
+   130→   130→        </Button>
+   131→   131→      </PopoverTrigger>
+   132→   132→      <PopoverContent align="start" className="w-56 p-1">
+   133→   133→        <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+   134→   134→          Filter by platform
+   135→   135→        </div>
+   136→   136→        <div className="max-h-72 overflow-y-auto scrollbar-cadence">
+   137→   137→          {(Object.keys(PLATFORMS) as PlatformId[]).map((p) => {
+   138→   138→            const checked = selected.includes(p);
+   139→   139→            return (
+   140→   140→              <button
+   141→   141→                key={p}
+   142→   142→                type="button"
+   143→   143→                role="checkbox"
+   144→   144→                aria-checked={checked}
+   145→   145→                onClick={() => toggle(p)}
+   146→   146→                className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+   147→   147→              >
+   148→   148→                <span
+   149→   149→                  className={cn(
+   150→   150→                    "flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+   151→   151→                    checked
+   152→   152→                      ? "border-primary bg-primary text-primary-foreground"
+   153→   153→                      : "border-input bg-background"
+   154→   154→                  )}
+   155→   155→                >
+   156→   156→                  {checked && <CheckCheck className="size-3" />}
+   157→   157→                </span>
+   158→   158→                <PlatformBadge platform={p} className="size-5" />
+   159→   159→                <span className="flex-1 text-foreground">
+   160→   160→                  {PLATFORMS[p].name}
+   161→   161→                </span>
+   162→   162→              </button>
+   163→   163→            );
+   164→   164→          })}
+   165→   165→        </div>
+   166→   166→        <div className="mt-1 flex items-center justify-between gap-2 border-t border-border/60 px-2 py-2">
+   167→   167→          <Button
+   168→   168→            variant="ghost"
+   169→   169→            size="sm"
+   170→   170→            className="h-7 px-2 text-xs"
+   171→   171→            onClick={() => onChange([])}
+   172→   172→            disabled={selected.length === 0}
+   173→   173→          >
+   174→   174→            Clear
+   175→   175→          </Button>
+   176→   176→          <Button
+   177→   177→            size="sm"
+   178→   178→            className="h-7 px-2 text-xs"
+   179→   179→            onClick={() => setOpen(false)}
+   180→   180→          >
+   181→   181→            Done
+   182→   182→          </Button>
+   183→   183→        </div>
+   184→   184→      </PopoverContent>
+   185→   185→    </Popover>
+   186→   186→  );
+   187→   187→}
+   188→   188→
+   189→   189→/* ------------------------------------------------------------------ */
+   190→   190→/* Stats strip                                                        */
+   191→   191→/* ------------------------------------------------------------------ */
+   192→   192→
+   193→   193→function StatsStrip({
+   194→   194→  counts,
+   195→   195→}: {
+   196→   196→  counts: { open: number; pending: number; resolved: number };
+   197→   197→}) {
+   198→   198→  return (
+   199→   199→    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+   200→   200→      <StatCard
+   201→   201→        label="Open"
+   202→   202→        value={counts.open}
+   203→   203→        icon={InboxIcon}
+   204→   204→        accent="text-primary"
+   205→   205→        deltaLabel="needs a reply"
+   206→   206→      />
+   207→   207→      <StatCard
+   208→   208→        label="Pending"
+   209→   209→        value={counts.pending}
+   210→   210→        icon={Clock3}
+   211→   211→        accent="text-amber-brand"
+   212→   212→        deltaLabel="awaiting review"
+   213→   213→      />
+   214→   214→      <StatCard
+   215→   215→        label="Resolved"
+   216→   216→        value={counts.resolved}
+   217→   217→        icon={CheckCircle2}
+   218→   218→        accent="text-mint"
+   219→   219→        deltaLabel="this week"
+   220→   220→      />
+   221→   221→      <StatCard
+   222→   222→        label="Avg. response"
+   223→   223→        value="42m"
+   224→   224→        icon={CornerUpLeft}
+   225→   225→        accent="text-plum"
+   226→   226→        delta={-12}
+   227→   227→        deltaLabel="vs last week"
+   228→   228→      />
+   229→   229→    </div>
+   230→   230→  );
+   231→   231→}
+   232→   232→
+   233→   233→/* ------------------------------------------------------------------ */
+   234→   234→/* Conversation list item                                             */
+   235→   235→/* ------------------------------------------------------------------ */
+   236→   236→
+   237→   237→const InboxListItem = React.memo(function InboxListItem({
+   238→   238→  item,
+   239→   239→  selected,
+   240→   240→  onSelect,
+   241→   241→}: {
+   242→   242→  item: InboxItem;
+   243→   243→  selected: boolean;
+   244→   244→  onSelect: () => void;
+   245→   245→}) {
+   246→   246→  return (
+   247→   247→    <button
+   248→   248→      type="button"
+   249→   249→      role="option"
+   250→   250→      aria-selected={selected}
+   251→   251→      onClick={onSelect}
+   252→   252→      className={cn(
+   253→   253→        "group relative flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
+   254→   254→        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+   255→   255→        selected
+   256→   256→          ? "border-primary/40 bg-primary/5"
+   257→   257→          : "border-border/60 bg-card hover:border-border hover:bg-accent/40",
+   258→   258→        item.status === "open" && !selected && "bg-accent/30"
+   259→   259→      )}
+   260→   260→    >
+   261→   261→      {selected && (
+   262→   262→        <span
+   263→   263→          aria-hidden="true"
+   264→   264→          className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary"
+   265→   265→        />
+   266→   266→      )}
+   267→   267→      <Avatar name={item.author} color={item.avatarColor} size="sm" />
+   268→   268→      <div className="min-w-0 flex-1">
+   269→   269→        <div className="flex items-center gap-2">
+   270→   270→          <PlatformBadge platform={item.platform} className="size-5 shrink-0" />
+   271→   271→          <span className="truncate text-sm font-medium text-foreground">
+   272→   272→            {item.author}
+   273→   273→          </span>
+   274→   274→          <span className="ml-auto shrink-0 text-[10px] tabular-nums text-muted-foreground">
+   275→   275→            {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+   276→   276→          </span>
+   277→   277→        </div>
+   278→   278→        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+   279→   279→          {item.authorHandle}
+   280→   280→        </p>
+   281→   281→        <p className="mt-1.5 line-clamp-2 text-xs text-foreground/90">
+   282→   282→          {item.text}
+   283→   283→        </p>
+   284→   284→        <div className="mt-2 flex items-center gap-1.5">
+   285→   285→          <span
+   286→   286→            className={cn("size-1.5 rounded-full", STATUS_DOT[item.status])}
+   287→   287→            aria-hidden="true"
+   288→   288→          />
+   289→   289→          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+   290→   290→            {item.status}
+   291→   291→          </span>
+   292→   292→          <Badge
+   293→   293→            variant="outline"
+   294→   294→            className="ml-auto h-4 border-border/60 px-1.5 text-[9px] font-medium uppercase text-muted-foreground"
+   295→   295→          >
+   296→   296→            {TYPE_LABEL[item.type]}
+   297→   297→          </Badge>
+   298→   298→        </div>
+   299→   299→      </div>
+   300→   300→    </button>
+   301→   301→  );
+   302→   302→});
+   303→   303→
+   304→   304→/* ------------------------------------------------------------------ */
+   305→   305→/* Detail panel                                                       */
+   306→   306→/* ------------------------------------------------------------------ */
+   307→   307→
+   308→   308→function AssignMenu() {
+   309→   309→  return (
+   310→   310→    <DropdownMenu>
+   311→   311→      <DropdownMenuTrigger asChild>
+   312→   312→        <Button variant="outline" size="sm" className="h-8 gap-1.5">
+   313→   313→          <UserCheck className="size-3.5" />
+   314→   314→          Assign
+   315→   315→        </Button>
+   316→   316→      </DropdownMenuTrigger>
+   317→   317→      <DropdownMenuContent align="end" className="w-48">
+   318→   318→        <DropdownMenuLabel>Assign to</DropdownMenuLabel>
+   319→   319→        <DropdownMenuSeparator />
+   320→   320→        <DropdownMenuItem>Maya Okafor (you)</DropdownMenuItem>
+   321→   321→        <DropdownMenuItem>Leo Brennan</DropdownMenuItem>
+   322→   322→        <DropdownMenuItem>Priya Sharma</DropdownMenuItem>
+   323→   323→        <DropdownMenuItem>Noah Lindqvist</DropdownMenuItem>
+   324→   324→      </DropdownMenuContent>
+   325→   325→    </DropdownMenu>
+   326→   326→  );
+   327→   327→}
+   328→   328→
+   329→   329→function DetailPanel({
+   330→   330→  item,
+   331→   331→  onClose,
+   332→   332→}: {
+   333→   333→  item: InboxItem | null;
+   334→   334→  onClose: () => void;
+   335→   335→}) {
+   336→   336→  const resolve = useResolveInbox();
+   337→   337→  const [reply, setReply] = React.useState("");
+   338→   338→
+   339→   339→  React.useEffect(() => {
+   340→   340→    setReply("");
+   341→   341→  }, [item?.id]);
+   342→   342→
+   343→   343→  if (!item) {
+   344→   344→    return (
+   345→   345→      <div className="flex h-full min-h-[24rem] items-center justify-center rounded-xl border border-dashed border-border/70 bg-card/40 p-8">
+   346→   346→        <EmptyState
+   347→   347→          icon={InboxIcon}
+   348→   348→          title="Select a conversation"
+   349→   349→          description="Pick a message on the left to read it, draft a reply, and resolve it from one calm workspace."
+   350→   350→        />
+   351→   351→      </div>
+   352→   352→    );
+   353→   353→  }
+   354→   354→
+   355→   355→  const handleSendReply = () => {
+   356→   356→    if (!reply.trim()) {
+   357→   357→      toast.error("Write a reply first");
+   358→   358→      return;
+   359→   359→    }
+   360→   360→    toast.success("Reply sent", {
+   361→   361→      description: `To ${item.authorHandle} on ${PLATFORMS[item.platform].name}`,
+   362→   362→    });
+   363→   363→    setReply("");
+   364→   364→  };
+   365→   365→
+   366→   366→  const handleResolve = (status: InboxItem["status"]) => {
+   367→   367→    resolve.mutate(
+   368→   368→      { id: item.id, status },
+   369→   369→      {
+   370→   370→        onSuccess: () =>
+   371→   371→          toast.success(
+   372→   372→            status === "resolved"
+   373→   373→              ? "Conversation resolved"
+   374→   374→              : status === "pending"
+   375→   375→                ? "Marked as pending"
+   376→   376→                : "Reopened"
+   377→   377→          ),
+   378→   378→        onError: () => toast.error("Couldn't update status"),
+   379→   379→      }
+   380→   380→    );
+   381→   381→  };
+   382→   382→
+   383→   383→  return (
+   384→   384→    <div className="flex h-full min-h-[24rem] flex-col rounded-xl border border-border/70 bg-card">
+   385→   385→      {/* Header */}
+   386→   386→      <div className="flex items-start gap-3 border-b border-border/60 p-4">
+   387→   387→        <Avatar name={item.author} color={item.avatarColor} />
+   388→   388→        <div className="min-w-0 flex-1">
+   389→   389→          <div className="flex items-center gap-2">
+   390→   390→            <p className="truncate text-sm font-medium text-foreground">
+   391→   391→              {item.author}
+   392→   392→            </p>
+   393→   393→            <span className="text-xs text-muted-foreground">
+   394→   394→              {item.authorHandle}
+   395→   395→            </span>
+   396→   396→          </div>
+   397→   397→          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+   398→   398→            <PlatformBadge platform={item.platform} className="size-4" />
+   399→   399→            <span>{PLATFORMS[item.platform].name}</span>
+   400→   400→            <span aria-hidden="true">·</span>
+   401→   401→            <span className="uppercase tracking-wide">{TYPE_LABEL[item.type]}</span>
+   402→   402→            <span aria-hidden="true">·</span>
+   403→   403→            <span>
+   404→   404→              {formatDistanceToNow(new Date(item.createdAt), {
+   405→   405→                addSuffix: true,
+   406→   406→              })}
+   407→   407→            </span>
+   408→   408→          </div>
+   409→   409→        </div>
+   410→   410→        <Button
+   411→   411→          variant="ghost"
+   412→   412→          size="icon"
+   413→   413→          className="size-8 lg:hidden"
+   414→   414→          onClick={onClose}
+   415→   415→          aria-label="Close detail"
+   416→   416→        >
+   417→   417→          <X className="size-4" />
+   418→   418→        </Button>
+   419→   419→      </div>
+   420→   420→
+   421→   421→      {/* Thread body */}
+   422→   422→      <div className="flex-1 space-y-4 overflow-y-auto scrollbar-cadence p-4">
+   423→   423→        {item.type === "comment" && (
+   424→   424→          <div className="rounded-lg border border-border/60 bg-muted/40 p-3">
+   425→   425→            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+   426→   426→              Original post
+   427→   427→            </p>
+   428→   428→            <p className="mt-1.5 text-sm text-foreground">
+   429→   429→              Behind every great brand is a consistent voice. Here's how we keep
+   430→   430→              ours sharp across 8 channels. 🧵
+   431→   431→            </p>
+   432→   432→            <p className="mt-2 text-[10px] text-muted-foreground">
+   433→   433→              Cadence · published 2d ago
+   434→   434→            </p>
+   435→   435→          </div>
+   436→   436→        )}
+   437→   437→
+   438→   438→        <div className="flex items-start gap-3">
+   439→   439→          <Avatar name={item.author} color={item.avatarColor} size="sm" />
+   440→   440→          <div className="min-w-0 flex-1 rounded-lg rounded-tl-sm bg-accent/60 p-3">
+   441→   441→            <div className="mb-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+   442→   442→              <span className="font-medium text-foreground">{item.author}</span>
+   443→   443→              <span>{item.authorHandle}</span>
+   444→   444→            </div>
+   445→   445→            <p className="text-sm leading-relaxed text-foreground">{item.text}</p>
+   446→   446→          </div>
+   447→   447→        </div>
+   448→   448→
+   449→   449→        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+   450→   450→          <span
+   451→   451→            className={cn("size-1.5 rounded-full", STATUS_DOT[item.status])}
+   452→   452→            aria-hidden="true"
+   453→   453→          />
+   454→   454→          <span className="uppercase tracking-wide">{item.status}</span>
+   455→   455→          <span aria-hidden="true">·</span>
+   456→   456→          <span>Assigned to Maya Okafor</span>
+   457→   457→        </div>
+   458→   458→      </div>
+   459→   459→
+   460→   460→      {/* Reply + actions */}
+   461→   461→      <div className="space-y-3 border-t border-border/60 p-4">
+   462→   462→        <div className="relative">
+   463→   463→          <Textarea
+   464→   464→            value={reply}
+   465→   465→            onChange={(e) => setReply(e.target.value)}
+   466→   466→            placeholder={`Reply to ${item.authorHandle}…`}
+   467→   467→            className="min-h-[88px] resize-none pr-24 text-sm"
+   468→   468→            aria-label={`Reply to ${item.author}`}
+   469→   469→          />
+   470→   470→          <Button
+   471→   471→            size="sm"
+   472→   472→            className="absolute bottom-3 right-3 gap-1.5"
+   473→   473→            onClick={handleSendReply}
+   474→   474→          >
+   475→   475→            <Send className="size-3.5" />
+   476→   476→            Send reply
+   477→   477→          </Button>
+   478→   478→        </div>
+   479→   479→        <div className="flex flex-wrap items-center gap-2">
+   480→   480→          <Button
+   481→   481→            size="sm"
+   482→   482→            variant="outline"
+   483→   483→            className="h-8 gap-1.5"
+   484→   484→            onClick={() => handleResolve("resolved")}
+   485→   485→            disabled={resolve.isPending || item.status === "resolved"}
+   486→   486→          >
+   487→   487→            <CheckCircle2 className="size-3.5 text-mint" />
+   488→   488→            Resolve
+   489→   489→          </Button>
+   490→   490→          <Button
+   491→   491→            size="sm"
+   492→   492→            variant="outline"
+   493→   493→            className="h-8 gap-1.5"
+   494→   494→            onClick={() => handleResolve("pending")}
+   495→   495→            disabled={resolve.isPending || item.status === "pending"}
+   496→   496→          >
+   497→   497→            <Clock3 className="size-3.5 text-amber-brand" />
+   498→   498→            Mark pending
+   499→   499→          </Button>
+   500→   500→          <AssignMenu />
+   501→   501→          <Button
+   502→   502→            size="sm"
+   503→   503→            variant="ghost"
+   504→   504→            className="h-8 gap-1.5"
+   505→   505→            onClick={() => toast.info("Snoozed for 4 hours")}
+   506→   506→          >
+   507→   507→            <Clock3 className="size-3.5" />
+   508→   508→            Snooze
+   509→   509→          </Button>
+   510→   510→          <span className="ml-auto text-[10px] text-muted-foreground">
+   511→   511→            {reply.length} chars
+   512→   512→          </span>
+   513→   513→        </div>
+   514→   514→      </div>
+   515→   515→    </div>
+   516→   516→  );
+   517→   517→}
+   518→   518→
+   519→   519→/* ------------------------------------------------------------------ */
+   520→   520→/* Main view                                                          */
+   521→   521→/* ------------------------------------------------------------------ */
+   522→   522→
+   523→   523→export function InboxView() {
+   524→   524→  const { inbox, isLoading } = useInbox();
+   525→   525→  const [type, setType] = React.useState<TypeFilter>("all");
+   526→   526→  const [platforms, setPlatforms] = React.useState<PlatformId[]>([]);
+   527→   527→  const [status, setStatus] = React.useState<StatusFilter>("all");
+   528→   528→  const [query, setQuery] = React.useState("");
+   529→   529→  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+   530→   530→  const [mobileOpen, setMobileOpen] = React.useState(false);
+   531→   531→  const listRef = React.useRef<HTMLDivElement>(null);
+   532→   532→
+   533→   533→  const counts = React.useMemo(() => {
+   534→   534→    const base = inbox ?? [];
+   535→   535→    return {
+   536→   536→      open: base.filter((i) => i.status === "open").length,
+   537→   537→      pending: base.filter((i) => i.status === "pending").length,
+   538→   538→      resolved: base.filter((i) => i.status === "resolved").length,
+   539→   539→    };
+   540→   540→  }, [inbox]);
+   541→   541→
+   542→   542→  const filtered = React.useMemo(() => {
+   543→   543→    const base = inbox ?? [];
+   544→   544→    return base.filter((i) => {
+   545→   545→      if (type !== "all" && i.type !== type) return false;
+   546→   546→      if (platforms.length && !platforms.includes(i.platform)) return false;
+   547→   547→      if (status !== "all" && i.status !== status) return false;
+   548→   548→      if (query) {
+   549→   549→        const q = query.toLowerCase();
+   550→   550→        if (
+   551→   551→          !i.text.toLowerCase().includes(q) &&
+   552→   552→          !i.author.toLowerCase().includes(q) &&
+   553→   553→          !i.authorHandle.toLowerCase().includes(q)
+   554→   554→        )
+   555→   555→          return false;
+   556→   556→      }
+   557→   557→      return true;
+   558→   558→    });
+   559→   559→  }, [inbox, type, platforms, status, query]);
+   560→   560→
+   561→   561→  const selected = React.useMemo(
+   562→   562→    () => filtered.find((i) => i.id === selectedId) ?? filtered[0] ?? null,
+   563→   563→    [filtered, selectedId]
+   564→   564→  );
+   565→   565→
+   566→   566→  // Keyboard navigation ↑↓ + Enter
+   567→   567→  React.useEffect(() => {
+   568→   568→    const onKey = (e: KeyboardEvent) => {
+   569→   569→      if (e.target instanceof HTMLElement) {
+   570→   570→        const tag = e.target.tagName;
+   571→   571→        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+   572→   572→      }
+   573→   573→      if (filtered.length === 0) return;
+   574→   574→      const idx = filtered.findIndex((i) => i.id === selected?.id);
+   575→   575→      if (e.key === "ArrowDown") {
+   576→   576→        e.preventDefault();
+   577→   577→        const next = filtered[Math.min(idx + 1, filtered.length - 1)];
+   578→   578→        setSelectedId(next.id);
+   579→   579→      } else if (e.key === "ArrowUp") {
+   580→   580→        e.preventDefault();
+   581→   581→        const prev = filtered[Math.max(idx - 1, 0)];
+   582→   582→        setSelectedId(prev.id);
+   583→   583→      } else if (e.key === "Enter" && selected) {
+   584→   584→        e.preventDefault();
+   585→   585→        setMobileOpen(true);
+   586→   586→      }
+   587→   587→    };
+   588→   588→    window.addEventListener("keydown", onKey);
+   589→   589→    return () => window.removeEventListener("keydown", onKey);
+   590→   590→  }, [filtered, selected]);
+   591→   591→
+   592→   592→  const handleMarkAllResolved = () => {
+   593→   593→    const open = (inbox ?? []).filter((i) => i.status !== "resolved");
+   594→   594→    if (open.length === 0) {
+   595→   595→      toast.info("Nothing to resolve — inbox is already clear");
+   596→   596→      return;
+   597→   597→    }
+   598→   598→    toast.success(`Marked ${open.length} conversations as resolved`);
+   599→   599→  };
+   600→   600→
+   601→   601→  const onSelect = (id: string) => {
+   602→   602→    setSelectedId(id);
+   603→   603→    setMobileOpen(true);
+   604→   604→  };
+   605→   605→
+   606→   606→  return (
+   607→   607→    <div className="space-y-6">
+   608→   608→      <PageHeader
+   609→   609→        title="Engagement Inbox"
+   610→   610→        description="Every comment, mention, DM and review — in one calm, assignable inbox."
+   611→   611→        actions={
+   612→   612→          <Button
+   613→   613→            size="sm"
+   614→   614→            variant="outline"
+   615→   615→            className="gap-1.5"
+   616→   616→            onClick={handleMarkAllResolved}
+   617→   617→          >
+   618→   618→            <CheckCheck className="size-4" />
+   619→   619→            Mark all resolved
+   620→   620→          </Button>
+   621→   621→        }
+   622→   622→      />
+   623→   623→
+   624→   624→      <StatsStrip counts={counts} />
+   625→   625→
+   626→   626→      <Toolbar>
+   627→   627→        <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
+   628→   628→          {TYPE_OPTIONS.map((opt) => (
+   629→   629→            <button
+   630→   630→              key={opt.key}
+   631→   631→              type="button"
+   632→   632→              onClick={() => setType(opt.key)}
+   633→   633→              aria-pressed={type === opt.key}
+   634→   634→              className={cn(
+   635→   635→                "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+   636→   636→                type === opt.key
+   637→   637→                  ? "bg-background text-foreground shadow-sm"
+   638→   638→                  : "text-muted-foreground hover:text-foreground"
+   639→   639→              )}
+   640→   640→            >
+   641→   641→              <opt.icon className="size-3.5" />
+   642→   642→              {opt.label}
+   643→   643→            </button>
+   644→   644→          ))}
+   645→   645→        </div>
+   646→   646→        <PlatformMultiSelect selected={platforms} onChange={setPlatforms} />
+   647→   647→        <DropdownMenu>
+   648→   648→          <DropdownMenuTrigger asChild>
+   649→   649→            <Button variant="outline" size="sm" className="h-8 gap-1.5 capitalize">
+   650→   650→              <Filter className="size-3.5" />
+   651→   651→              {status === "all" ? "All statuses" : status}
+   652→   652→            </Button>
+   653→   653→          </DropdownMenuTrigger>
+   654→   654→          <DropdownMenuContent align="start" className="w-44">
+   655→   655→            {STATUS_OPTIONS.map((s) => (
+   656→   656→              <DropdownMenuItem
+   657→   657→                key={s.key}
+   658→   658→                onClick={() => setStatus(s.key)}
+   659→   659→                className={cn(status === s.key && "bg-accent")}
+   660→   660→              >
+   661→   661→                {s.label}
+   662→   662→              </DropdownMenuItem>
+   663→   663→            ))}
+   664→   664→          </DropdownMenuContent>
+   665→   665→        </DropdownMenu>
+   666→   666→        <div className="relative ml-auto">
+   667→   667→          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+   668→   668→          <Input
+   669→   669→            value={query}
+   670→   670→            onChange={(e) => setQuery(e.target.value)}
+   671→   671→            placeholder="Search messages, authors…"
+   672→   672→            className="h-8 w-full pl-8 text-sm sm:w-64"
+   673→   673→            aria-label="Search inbox"
+   674→   674→          />
+   675→   675→        </div>
+   676→   676→      </Toolbar>
+   677→   677→
+   678→   678→      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
+   679→   679→        {/* List */}
+   680→   680→        <div
+   681→   681→          ref={listRef}
+   682→   682→          role="listbox"
+   683→   683→          aria-label="Conversations"
+   684→   684→          className="max-h-[calc(100vh-22rem)] min-h-[20rem] space-y-2 overflow-y-auto scrollbar-cadence pr-1 lg:max-h-[calc(100vh-18rem)]"
+   685→   685→        >
+   686→   686→          {isLoading ? (
+   687→   687→            <div className="space-y-2">
+   688→   688→              {Array.from({ length: 6 }).map((_, i) => (
+   689→   689→                <div
+   690→   690→                  key={i}
+   691→   691→                  className="shimmer rounded-lg border border-border/60 bg-card p-3"
+   692→   692→                >
+   693→   693→                  <div className="flex items-center gap-2">
+   694→   694→                    <Skeleton className="size-7 rounded-full" />
+   695→   695→                    <Skeleton className="h-3 w-24" />
+   696→   696→                    <Skeleton className="ml-auto h-2 w-12" />
+   697→   697→                  </div>
+   698→   698→                  <Skeleton className="mt-3 h-3 w-full" />
+   699→   699→                  <Skeleton className="mt-2 h-3 w-2/3" />
+   700→   700→                </div>
+   701→   701→              ))}
+   702→   702→            </div>
+   703→   703→          ) : filtered.length === 0 ? (
+   704→   704→            <EmptyState
+   705→   705→              icon={InboxIcon}
+   706→   706→              title="No conversations match"
+   707→   707→              description="Try a different filter or clear your search to see everything."
+   708→   708→              action={
+   709→   709→                <Button
+   710→   710→                  variant="outline"
+   711→   711→                  size="sm"
+   712→   712→                  onClick={() => {
+   713→   713→                    setType("all");
+   714→   714→                    setPlatforms([]);
+   715→   715→                    setStatus("all");
+   716→   716→                    setQuery("");
+   717→   717→                  }}
+   718→   718→                >
+   719→   719→                  Reset filters
+   720→   720→                </Button>
+   721→   721→              }
+   722→   722→            />
+   723→   723→          ) : (
+   724→   724→            <AnimatePresence initial={false}>
+   725→   725→              {filtered.map((item) => (
+   726→   726→                <motion.div
+   727→   727→                  key={item.id}
+   728→   728→                  layout
+   729→   729→                  initial={{ opacity: 0, y: 4 }}
+   730→   730→                  animate={{ opacity: 1, y: 0 }}
+   731→   731→                  exit={{ opacity: 0 }}
+   732→   732→                  transition={{ duration: 0.16 }}
+   733→   733→                >
+   734→   734→                  <InboxListItem
+   735→   735→                    item={item}
+   736→   736→                    selected={selected?.id === item.id}
+   737→   737→                    onSelect={() => onSelect(item.id)}
+   738→   738→                  />
+   739→   739→                </motion.div>
+   740→   740→              ))}
+   741→   741→            </AnimatePresence>
+   742→   742→          )}
+   743→   743→        </div>
+   744→   744→
+   745→   745→        {/* Desktop detail */}
+   746→   746→        <div className="hidden lg:block">
+   747→   747→          <DetailPanel item={selected} onClose={() => setSelectedId(null)} />
+   748→   748→        </div>
+   749→   749→      </div>
+   750→   750→
+   751→   751→      {/* Mobile detail sheet */}
+   752→   752→      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+   753→   753→        <SheetContent
+   754→   754→          side="right"
+   755→   755→          className="w-full overflow-y-auto p-0 sm:max-w-md"
+   756→   756→        >
+   757→   757→          <SheetHeader className="sr-only">
+   758→   758→            <SheetTitle>Conversation</SheetTitle>
+   759→   759→            <SheetDescription>
+   760→   760→              Read and reply to this message.
+   761→   761→            </SheetDescription>
+   762→   762→          </SheetHeader>
+   763→   763→          <DetailPanel
+   764→   764→            item={selected}
+   765→   765→            onClose={() => setMobileOpen(false)}
+   766→   766→          />
+   767→   767→        </SheetContent>
+   768→   768→      </Sheet>
+   769→   769→    </div>
+   770→   770→  );
+   771→   771→}
+   772→   772→

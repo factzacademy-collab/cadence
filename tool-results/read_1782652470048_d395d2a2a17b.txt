@@ -1,0 +1,780 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import { useForm, Controller } from "react-hook-form";
+     5→import { zodResolver } from "@hookform/resolvers/zod";
+     6→import { z } from "zod";
+     7→import {
+     8→  Sparkles,
+     9→  Image as ImageIcon,
+    10→  Calendar as CalendarIcon,
+    11→  Clock,
+    12→  Trash2,
+    13→  Plus,
+    14→  Check,
+    15→  Loader2,
+    16→} from "lucide-react";
+    17→import { format } from "date-fns";
+    18→import { toast } from "sonner";
+    19→
+    20→import { cn } from "@/lib/utils";
+    21→import { useApp } from "@/lib/store";
+    22→import { PLATFORM_LIST, PLATFORMS, type PlatformId } from "@/lib/brand";
+    23→import type { PostStatus } from "@/lib/types";
+    24→import {
+    25→  Sheet,
+    26→  SheetContent,
+    27→  SheetHeader,
+    28→  SheetTitle,
+    29→  SheetDescription,
+    30→} from "@/components/ui/sheet";
+    31→import { Button } from "@/components/ui/button";
+    32→import { Badge } from "@/components/ui/badge";
+    33→import { Textarea } from "@/components/ui/textarea";
+    34→import { Input } from "@/components/ui/input";
+    35→import { Label } from "@/components/ui/label";
+    36→import {
+    37→  Select,
+    38→  SelectContent,
+    39→  SelectItem,
+    40→  SelectTrigger,
+    41→  SelectValue,
+    42→} from "@/components/ui/select";
+    43→import {
+    44→  Popover,
+    45→  PopoverContent,
+    46→  PopoverTrigger,
+    47→} from "@/components/ui/popover";
+    48→import { ScrollArea } from "@/components/ui/scroll-area";
+    49→import { PlatformBadge, PlatformIcon } from "@/components/brand/platform-icon";
+    50→import {
+    51→  usePosts,
+    52→  useCreatePost,
+    53→  useUpdatePost,
+    54→  useMedia,
+    55→  useCampaigns,
+    56→  useGenerateCaptions,
+    57→} from "@/hooks/use-api";
+    58→import { Avatar } from "@/components/dashboard/shared";
+    59→
+    60→const PLATFORM_LIMITS: Record<PlatformId, number> = {
+    61→  x: 280,
+    62→  instagram: 2200,
+    63→  linkedin: 3000,
+    64→  facebook: 2200,
+    65→  tiktok: 2200,
+    66→  youtube: 2200,
+    67→  threads: 2200,
+    68→  pinterest: 2200,
+    69→};
+    70→
+    71→const TONES = [
+    72→  "Engaging",
+    73→  "Professional",
+    74→  "Playful",
+    75→  "Inspirational",
+    76→  "Concise",
+    77→];
+    78→
+    79→const schema = z.object({
+    80→  text: z.string().min(1, "Caption is required"),
+    81→  platforms: z.array(z.string()).min(1, "Pick at least one platform"),
+    82→  scheduledAt: z.string().min(1, "Pick a date and time"),
+    83→  status: z.enum(["draft", "scheduled", "in-review"]),
+    84→  campaignId: z.string().optional().nullable(),
+    85→  mediaIds: z.array(z.string()).default([]),
+    86→});
+    87→
+    88→type FormValues = z.infer<typeof schema>;
+    89→
+    90→function toLocalInputValue(iso: string): string {
+    91→  if (!iso) return "";
+    92→  const d = new Date(iso);
+    93→  if (isNaN(d.getTime())) return "";
+    94→  const pad = (n: number) => String(n).padStart(2, "0");
+    95→  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    96→}
+    97→
+    98→function quickPreset(label: string): string {
+    99→  const now = new Date();
+   100→  if (label === "Now") return now.toISOString();
+   101→  if (label === "Tomorrow 9am") {
+   102→    const d = new Date(now);
+   103→    d.setDate(d.getDate() + 1);
+   104→    d.setHours(9, 0, 0, 0);
+   105→    return d.toISOString();
+   106→  }
+   107→  if (label === "Next week 9am") {
+   108→    const d = new Date(now);
+   109→    d.setDate(d.getDate() + 7);
+   110→    d.setHours(9, 0, 0, 0);
+   111→    return d.toISOString();
+   112→  }
+   113→  return now.toISOString();
+   114→}
+   115→
+   116→export function Composer() {
+   117→  const open = useApp((s) => s.composerOpen);
+   118→  const closeComposer = useApp((s) => s.closeComposer);
+   119→  const postId = useApp((s) => s.composerPostId);
+   120→
+   121→  const { data: postsData } = usePosts();
+   122→  const posts = postsData?.posts ?? [];
+   123→  const editing = postId ? posts.find((p) => p.id === postId) : undefined;
+   124→
+   125→  const createPost = useCreatePost();
+   126→  const updatePost = useUpdatePost();
+   127→  const { data: mediaData } = useMedia();
+   128→  const media = mediaData?.media ?? [];
+   129→  const { data: campaignsData } = useCampaigns();
+   130→  const campaigns = campaignsData?.campaigns ?? [];
+   131→  const generateCaptions = useGenerateCaptions();
+   132→
+   133→  const [captions, setCaptions] = React.useState<string[]>([]);
+   134→  const [tone, setTone] = React.useState(TONES[0]);
+   135→  const [mediaPickerOpen, setMediaPickerOpen] = React.useState(false);
+   136→
+   137→  const defaults: FormValues = {
+   138→    text: "",
+   139→    platforms: [],
+   140→    scheduledAt: quickPreset("Tomorrow 9am"),
+   141→    status: "scheduled",
+   142→    campaignId: null,
+   143→    mediaIds: [],
+   144→  };
+   145→
+   146→  const {
+   147→    control,
+   148→    register,
+   149→    handleSubmit,
+   150→    reset,
+   151→    watch,
+   152→    setValue,
+   153→    getValues,
+   154→    formState: { errors, isSubmitting },
+   155→  } = useForm<FormValues>({
+   156→    resolver: zodResolver(schema),
+   157→    defaultValues: defaults,
+   158→  });
+   159→
+   160→  // Hydrate form when opening / switching post.
+   161→  React.useEffect(() => {
+   162→    if (!open) {
+   163→      setCaptions([]);
+   164→      return;
+   165→    }
+   166→    if (editing) {
+   167→      reset({
+   168→        text: editing.text,
+   169→        platforms: editing.platforms,
+   170→        scheduledAt: editing.scheduledAt,
+   171→        status: (editing.status === "published" || editing.status === "failed"
+   172→          ? "scheduled"
+   173→          : editing.status) as FormValues["status"],
+   174→        campaignId: editing.campaignId ?? null,
+   175→        mediaIds: editing.mediaIds,
+   176→      });
+   177→    } else {
+   178→      reset(defaults);
+   179→    }
+   180→    setCaptions([]);
+   181→     
+   182→  }, [open, postId, editing?.id]);
+   183→
+   184→  const text = watch("text") ?? "";
+   185→  const platforms = watch("platforms") ?? [];
+   186→  const scheduledAt = watch("scheduledAt") ?? "";
+   187→  const mediaIds = watch("mediaIds") ?? [];
+   188→  const status = watch("status");
+   189→
+   190→  const selectedPlatforms = platforms as PlatformId[];
+   191→  const limit = selectedPlatforms.length
+   192→    ? Math.min(...selectedPlatforms.map((p) => PLATFORM_LIMITS[p]))
+   193→    : 280;
+   194→  const over = text.length > limit;
+   195→  const previewMedia = media.find((m) => m.id === mediaIds[0]);
+   196→
+   197→  const togglePlatform = (id: PlatformId) => {
+   198→    const current = new Set(platforms as string[]);
+   199→    if (current.has(id)) current.delete(id);
+   200→    else current.add(id);
+   201→    setValue("platforms", Array.from(current), { shouldValidate: true });
+   202→  };
+   203→
+   204→  const toggleMedia = (id: string) => {
+   205→    const current = new Set(mediaIds);
+   206→    if (current.has(id)) current.delete(id);
+   207→    else current.add(id);
+   208→    setValue("mediaIds", Array.from(current), { shouldValidate: true });
+   209→  };
+   210→
+   211→  const handleGenerate = async () => {
+   212→    const topic = text.trim() || "an exciting Cadence product update";
+   213→    try {
+   214→      const res = await generateCaptions.mutateAsync({
+   215→        topic,
+   216→        platforms: selectedPlatforms.length
+   217→          ? selectedPlatforms
+   218→          : (["instagram", "linkedin", "x"] as PlatformId[]),
+   219→        tone: tone.toLowerCase(),
+   220→        count: 3,
+   221→      });
+   222→      setCaptions(res.captions ?? []);
+   223→    } catch {
+   224→      toast.error("Couldn’t generate captions. Try again.");
+   225→    }
+   226→  };
+   227→
+   228→  const onSubmit = (values: FormValues) => {
+   229→    const payload = {
+   230→      text: values.text,
+   231→      platforms: values.platforms as PlatformId[],
+   232→      scheduledAt: values.scheduledAt,
+   233→      status: values.status as PostStatus,
+   234→      campaignId: values.campaignId || null,
+   235→      mediaIds: values.mediaIds,
+   236→    };
+   237→    if (editing) {
+   238→      updatePost.mutate(
+   239→        { id: editing.id, patch: payload },
+   240→        {
+   241→          onSuccess: () => {
+   242→            toast.success("Post updated");
+   243→            closeComposer();
+   244→          },
+   245→          onError: () => toast.error("Couldn’t update post"),
+   246→        }
+   247→      );
+   248→    } else {
+   249→      createPost.mutate(payload, {
+   250→        onSuccess: () => {
+   251→          toast.success(
+   252→            values.status === "scheduled"
+   253→              ? "Post scheduled"
+   254→              : values.status === "in-review"
+   255→                ? "Sent for review"
+   256→                : "Draft saved"
+   257→          );
+   258→          closeComposer();
+   259→        },
+   260→        onError: () => toast.error("Couldn’t save post"),
+   261→      });
+   262→    }
+   263→  };
+   264→
+   265→  const handleDiscard = () => {
+   266→    reset(defaults);
+   267→    setCaptions([]);
+   268→    closeComposer();
+   269→    toast.info("Draft discarded");
+   270→  };
+   271→
+   272→  const pending = createPost.isPending || updatePost.isPending;
+   273→
+   274→  return (
+   275→    <Sheet open={open} onOpenChange={(o) => (o ? null : closeComposer())}>
+   276→      <SheetContent
+   277→        side="right"
+   278→        className="w-full gap-0 p-0 sm:max-w-2xl lg:max-w-5xl"
+   279→      >
+   280→        <SheetHeader className="flex flex-row items-center justify-between gap-2 border-b border-border/70 px-5 py-3.5">
+   281→          <div className="space-y-0.5">
+   282→            <SheetTitle className="text-base font-semibold">
+   283→              {editing ? "Edit post" : "Create post"}
+   284→            </SheetTitle>
+   285→            <SheetDescription className="text-xs">
+   286→              Compose once, publish across every channel.
+   287→            </SheetDescription>
+   288→          </div>
+   289→        </SheetHeader>
+   290→
+   291→        <form
+   292→          onSubmit={handleSubmit(onSubmit)}
+   293→          className="flex min-h-0 flex-1 flex-col"
+   294→        >
+   295→          <ScrollArea className="min-h-0 flex-1">
+   296→            <div className="grid grid-cols-1 gap-0 lg:grid-cols-[1fr_minmax(320px,420px)]">
+   297→              {/* Editor */}
+   298→              <div className="space-y-5 p-5">
+   299→                {/* Platforms */}
+   300→                <div className="space-y-2">
+   301→                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+   302→                    Channels
+   303→                  </Label>
+   304→                  <div className="flex flex-wrap gap-2">
+   305→                    {PLATFORM_LIST.map((p) => {
+   306→                      const selected = platforms.includes(p.id);
+   307→                      return (
+   308→                        <button
+   309→                          key={p.id}
+   310→                          type="button"
+   311→                          onClick={() => togglePlatform(p.id)}
+   312→                          aria-pressed={selected}
+   313→                          className={cn(
+   314→                            "group inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors",
+   315→                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+   316→                            selected
+   317→                              ? "border-primary/30 bg-primary/10 text-foreground"
+   318→                              : "border-border bg-card text-muted-foreground hover:bg-accent/60"
+   319→                          )}
+   320→                        >
+   321→                          <PlatformBadge
+   322→                            platform={p.id}
+   323→                            className="size-5"
+   324→                          />
+   325→                          <span>{p.name}</span>
+   326→                          {selected && (
+   327→                            <Check className="size-3 text-primary" />
+   328→                          )}
+   329→                        </button>
+   330→                      );
+   331→                    })}
+   332→                  </div>
+   333→                  {errors.platforms && (
+   334→                    <p className="text-xs text-destructive">
+   335→                      {errors.platforms.message as string}
+   336→                    </p>
+   337→                  )}
+   338→                </div>
+   339→
+   340→                {/* Caption */}
+   341→                <div className="space-y-2">
+   342→                  <div className="flex items-center justify-between">
+   343→                    <Label
+   344→                      htmlFor="caption"
+   345→                      className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+   346→                    >
+   347→                      Caption
+   348→                    </Label>
+   349→                    <div className="flex items-center gap-2">
+   350→                      <Select value={tone} onValueChange={setTone}>
+   351→                        <SelectTrigger size="sm" className="h-7 w-32 text-xs">
+   352→                          <SelectValue />
+   353→                        </SelectTrigger>
+   354→                        <SelectContent>
+   355→                          {TONES.map((t) => (
+   356→                            <SelectItem key={t} value={t}>
+   357→                              {t}
+   358→                            </SelectItem>
+   359→                          ))}
+   360→                        </SelectContent>
+   361→                      </Select>
+   362→                      <Button
+   363→                        type="button"
+   364→                        variant="outline"
+   365→                        size="sm"
+   366→                        onClick={handleGenerate}
+   367→                        disabled={generateCaptions.isPending}
+   368→                        className="h-7"
+   369→                      >
+   370→                        {generateCaptions.isPending ? (
+   371→                          <Loader2 className="size-3.5 animate-spin" />
+   372→                        ) : (
+   373→                          <Sparkles className="size-3.5 text-primary" />
+   374→                        )}
+   375→                        Generate
+   376→                      </Button>
+   377→                    </div>
+   378→                  </div>
+   379→                  <Textarea
+   380→                    id="caption"
+   381→                    {...register("text")}
+   382→                    placeholder="What do you want to share?"
+   383→                    className="min-h-32 resize-y"
+   384→                  />
+   385→                  <div className="flex items-center justify-between text-xs">
+   386→                    <span className="text-muted-foreground">
+   387→                      {selectedPlatforms.length === 0
+   388→                        ? "Pick a channel to see its limit"
+   389→                        : `Most restrictive: ${PLATFORMS[selectedPlatforms[0]]?.name} · ${limit}`}
+   390→                    </span>
+   391→                    <span
+   392→                      className={cn(
+   393→                        "tabular-nums",
+   394→                        over ? "text-destructive" : "text-muted-foreground"
+   395→                      )}
+   396→                    >
+   397→                      {text.length} / {limit}
+   398→                    </span>
+   399→                  </div>
+   400→                  {errors.text && (
+   401→                    <p className="text-xs text-destructive">
+   402→                      {errors.text.message as string}
+   403→                    </p>
+   404→                  )}
+   405→
+   406→                  {/* AI suggestions */}
+   407→                  {captions.length > 0 && (
+   408→                    <div className="space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-2.5">
+   409→                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+   410→                        <Sparkles className="size-3" />
+   411→                        AI suggestions
+   412→                      </p>
+   413→                      <div className="flex flex-col gap-1.5">
+   414→                        {captions.map((c, i) => (
+   415→                          <button
+   416→                            key={i}
+   417→                            type="button"
+   418→                            onClick={() => {
+   419→                              setValue("text", c, { shouldValidate: true });
+   420→                              setCaptions([]);
+   421→                            }}
+   422→                            className="rounded-md border border-border/60 bg-card p-2 text-left text-xs text-foreground transition-colors hover:bg-accent/60"
+   423→                          >
+   424→                            {c}
+   425→                          </button>
+   426→                        ))}
+   427→                      </div>
+   428→                    </div>
+   429→                  )}
+   430→                </div>
+   431→
+   432→                {/* Media */}
+   433→                <div className="space-y-2">
+   434→                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+   435→                    Media
+   436→                  </Label>
+   437→                  <div className="flex flex-wrap items-center gap-2">
+   438→                    <Popover open={mediaPickerOpen} onOpenChange={setMediaPickerOpen}>
+   439→                      <PopoverTrigger asChild>
+   440→                        <Button
+   441→                          type="button"
+   442→                          variant="outline"
+   443→                          size="sm"
+   444→                          className="h-8"
+   445→                        >
+   446→                          <ImageIcon className="size-3.5" />
+   447→                          Add media
+   448→                        </Button>
+   449→                      </PopoverTrigger>
+   450→                      <PopoverContent className="w-80 p-2" align="start">
+   451→                        <div className="mb-1.5 flex items-center justify-between px-1">
+   452→                          <p className="text-xs font-semibold">Media library</p>
+   453→                          <span className="text-[10px] text-muted-foreground">
+   454→                            {media.length} assets
+   455→                          </span>
+   456→                        </div>
+   457→                        <ScrollArea className="h-64">
+   458→                          <div className="grid grid-cols-3 gap-1.5 p-1">
+   459→                            {media.map((m) => {
+   460→                              const sel = mediaIds.includes(m.id);
+   461→                              return (
+   462→                                <button
+   463→                                  key={m.id}
+   464→                                  type="button"
+   465→                                  onClick={() => toggleMedia(m.id)}
+   466→                                  className={cn(
+   467→                                    "relative aspect-square overflow-hidden rounded-md border transition-colors",
+   468→                                    sel
+   469→                                      ? "border-primary ring-2 ring-primary/30"
+   470→                                      : "border-border hover:border-primary/40"
+   471→                                  )}
+   472→                                >
+   473→                                  { }
+   474→                                  <img
+   475→                                    src={m.thumbnailUrl ?? m.url}
+   476→                                    alt={m.name}
+   477→                                    className="size-full object-cover"
+   478→                                  />
+   479→                                  {sel && (
+   480→                                    <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+   481→                                      <Check className="size-3" />
+   482→                                    </span>
+   483→                                  )}
+   484→                                </button>
+   485→                              );
+   486→                            })}
+   487→                          </div>
+   488→                        </ScrollArea>
+   489→                      </PopoverContent>
+   490→                    </Popover>
+   491→
+   492→                    {mediaIds.length > 0 && (
+   493→                      <div className="flex flex-wrap gap-1.5">
+   494→                        {mediaIds.slice(0, 4).map((id) => {
+   495→                          const m = media.find((x) => x.id === id);
+   496→                          if (!m) return null;
+   497→                          return (
+   498→                            <div
+   499→                              key={id}
+   500→                              className="group relative size-12 overflow-hidden rounded-md border border-border"
+   501→                            >
+   502→                              { }
+   503→                              <img
+   504→                                src={m.thumbnailUrl ?? m.url}
+   505→                                alt={m.name}
+   506→                                className="size-full object-cover"
+   507→                              />
+   508→                              <button
+   509→                                type="button"
+   510→                                onClick={() => toggleMedia(id)}
+   511→                                className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
+   512→                                aria-label={`Remove ${m.name}`}
+   513→                              >
+   514→                                <Trash2 className="size-3.5 text-white" />
+   515→                              </button>
+   516→                            </div>
+   517→                          );
+   518→                        })}
+   519→                      </div>
+   520→                    )}
+   521→                  </div>
+   522→                </div>
+   523→
+   524→                {/* Scheduling */}
+   525→                <div className="space-y-2">
+   526→                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+   527→                    Schedule
+   528→                  </Label>
+   529→                  <div className="flex flex-wrap items-center gap-2">
+   530→                    <div className="relative flex-1 min-w-[200px]">
+   531→                      <CalendarIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+   532→                      <Input
+   533→                        type="datetime-local"
+   534→                        {...register("scheduledAt")}
+   535→                        value={toLocalInputValue(scheduledAt)}
+   536→                        onChange={(e) => {
+   537→                          const v = e.target.value;
+   538→                          if (!v) return;
+   539→                          const d = new Date(v);
+   540→                          setValue("scheduledAt", d.toISOString(), {
+   541→                            shouldValidate: true,
+   542→                          });
+   543→                        }}
+   544→                        className="pl-9"
+   545→                      />
+   546→                    </div>
+   547→                    <div className="flex items-center gap-1">
+   548→                      {["Now", "Tomorrow 9am", "Next week 9am"].map((p) => (
+   549→                        <Button
+   550→                          key={p}
+   551→                          type="button"
+   552→                          variant="ghost"
+   553→                          size="sm"
+   554→                          className="h-9 text-xs"
+   555→                          onClick={() =>
+   556→                            setValue("scheduledAt", quickPreset(p), {
+   557→                              shouldValidate: true,
+   558→                            })
+   559→                          }
+   560→                        >
+   561→                          <Clock className="size-3" />
+   562→                          {p}
+   563→                        </Button>
+   564→                      ))}
+   565→                    </div>
+   566→                  </div>
+   567→                  {errors.scheduledAt && (
+   568→                    <p className="text-xs text-destructive">
+   569→                      {errors.scheduledAt.message as string}
+   570→                    </p>
+   571→                  )}
+   572→                </div>
+   573→
+   574→                {/* Campaign + status */}
+   575→                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+   576→                  <div className="space-y-2">
+   577→                    <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+   578→                      Campaign
+   579→                    </Label>
+   580→                    <Controller
+   581→                      control={control}
+   582→                      name="campaignId"
+   583→                      render={({ field }) => (
+   584→                        <Select
+   585→                          value={field.value ?? "__none__"}
+   586→                          onValueChange={(v) =>
+   587→                            field.onChange(v === "__none__" ? null : v)
+   588→                          }
+   589→                        >
+   590→                          <SelectTrigger className="w-full">
+   591→                            <SelectValue placeholder="No campaign" />
+   592→                          </SelectTrigger>
+   593→                          <SelectContent>
+   594→                            <SelectItem value="__none__">No campaign</SelectItem>
+   595→                            {campaigns.map((c) => (
+   596→                              <SelectItem key={c.id} value={c.id}>
+   597→                                <span
+   598→                                  className="mr-1.5 inline-block size-2 rounded-full"
+   599→                                  style={{ background: c.color }}
+   600→                                />
+   601→                                {c.name}
+   602→                              </SelectItem>
+   603→                            ))}
+   604→                          </SelectContent>
+   605→                        </Select>
+   606→                      )}
+   607→                    />
+   608→                  </div>
+   609→                  <div className="space-y-2">
+   610→                    <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+   611→                      Status
+   612→                    </Label>
+   613→                    <Controller
+   614→                      control={control}
+   615→                      name="status"
+   616→                      render={({ field }) => (
+   617→                        <Select value={field.value} onValueChange={field.onChange}>
+   618→                          <SelectTrigger className="w-full">
+   619→                            <SelectValue />
+   620→                          </SelectTrigger>
+   621→                          <SelectContent>
+   622→                            <SelectItem value="draft">Draft</SelectItem>
+   623→                            <SelectItem value="scheduled">Scheduled</SelectItem>
+   624→                            <SelectItem value="in-review">In review</SelectItem>
+   625→                          </SelectContent>
+   626→                        </Select>
+   627→                      )}
+   628→                    />
+   629→                  </div>
+   630→                </div>
+   631→              </div>
+   632→
+   633→              {/* Preview */}
+   634→              <div className="border-t border-border/70 bg-muted/30 p-5 lg:border-l lg:border-t-0">
+   635→                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+   636→                  Live preview
+   637→                </p>
+   638→                <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+   639→                  <div className="flex items-center gap-2.5">
+   640→                    <Avatar name="Maya Okafor" color="from-primary to-mint" size="sm" />
+   641→                    <div className="min-w-0 flex-1">
+   642→                      <p className="text-sm font-semibold text-foreground">
+   643→                        Cadence
+   644→                      </p>
+   645→                      <p className="text-xs text-muted-foreground">
+   646→                        Sponsored · {selectedPlatforms.length} channel
+   647→                        {selectedPlatforms.length === 1 ? "" : "s"}
+   648→                      </p>
+   649→                    </div>
+   650→                    <div className="flex -space-x-1.5">
+   651→                      {selectedPlatforms.slice(0, 3).map((p) => (
+   652→                        <PlatformBadge
+   653→                          key={p}
+   654→                          platform={p}
+   655→                          className="size-6 ring-2 ring-card"
+   656→                        />
+   657→                      ))}
+   658→                      {selectedPlatforms.length === 0 && (
+   659→                        <span className="text-[10px] text-muted-foreground">
+   660→                          no channels
+   661→                        </span>
+   662→                      )}
+   663→                    </div>
+   664→                  </div>
+   665→
+   666→                  <p className="mt-3 whitespace-pre-wrap break-words text-sm text-foreground">
+   667→                    {text || (
+   668→                      <span className="text-muted-foreground">
+   669→                        Your caption will appear here.
+   670→                      </span>
+   671→                    )}
+   672→                  </p>
+   673→
+   674→                  {previewMedia && (
+   675→                    <div className="mt-3 overflow-hidden rounded-lg border border-border/60">
+   676→                      { }
+   677→                      <img
+   678→                        src={previewMedia.thumbnailUrl ?? previewMedia.url}
+   679→                        alt={previewMedia.name}
+   680→                        className="aspect-video w-full object-cover"
+   681→                      />
+   682→                    </div>
+   683→                  )}
+   684→
+   685→                  <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2 text-xs text-muted-foreground">
+   686→                    <span>
+   687→                      {scheduledAt
+   688→                        ? format(new Date(scheduledAt), "EEE, MMM d · h:mm a")
+   689→                        : "Not scheduled"}
+   690→                    </span>
+   691→                    {status && (
+   692→                      <Badge variant="outline" className="capitalize">
+   693→                        {status}
+   694→                      </Badge>
+   695→                    )}
+   696→                  </div>
+   697→                </div>
+   698→
+   699→                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+   700→                  Preview is illustrative. Each platform will render your post
+   701→                  with its own native layout and limits.
+   702→                </p>
+   703→              </div>
+   704→            </div>
+   705→          </ScrollArea>
+   706→
+   707→          {/* Footer */}
+   708→          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border/70 bg-background px-5 py-3">
+   709→            <Button
+   710→              type="button"
+   711→              variant="ghost"
+   712→              size="sm"
+   713→              onClick={handleDiscard}
+   714→              disabled={pending}
+   715→            >
+   716→              <Trash2 className="size-4" />
+   717→              Discard
+   718→            </Button>
+   719→            <div className="flex items-center gap-2">
+   720→              <Button
+   721→                type="button"
+   722→                variant="outline"
+   723→                size="sm"
+   724→                disabled={pending || isSubmitting}
+   725→                onClick={() => {
+   726→                  const v = getValues();
+   727→                  const payload = {
+   728→                    text: v.text || "Untitled draft",
+   729→                    platforms: (v.platforms.length
+   730→                      ? v.platforms
+   731→                      : ["instagram"]) as PlatformId[],
+   732→                    scheduledAt: v.scheduledAt || new Date().toISOString(),
+   733→                    status: "draft" as PostStatus,
+   734→                    campaignId: v.campaignId || null,
+   735→                    mediaIds: v.mediaIds,
+   736→                  };
+   737→                  if (editing) {
+   738→                    updatePost.mutate(
+   739→                      { id: editing.id, patch: payload },
+   740→                      {
+   741→                        onSuccess: () => {
+   742→                          toast.success("Draft saved");
+   743→                          closeComposer();
+   744→                        },
+   745→                        onError: () => toast.error("Couldn’t save draft"),
+   746→                      }
+   747→                    );
+   748→                  } else {
+   749→                    createPost.mutate(payload, {
+   750→                      onSuccess: () => {
+   751→                        toast.success("Draft saved");
+   752→                        closeComposer();
+   753→                      },
+   754→                      onError: () => toast.error("Couldn’t save draft"),
+   755→                    });
+   756→                  }
+   757→                }}
+   758→              >
+   759→                Save draft
+   760→              </Button>
+   761→              <Button
+   762→                type="submit"
+   763→                size="sm"
+   764→                disabled={pending || isSubmitting}
+   765→              >
+   766→                {pending ? (
+   767→                  <Loader2 className="size-4 animate-spin" />
+   768→                ) : (
+   769→                  <Plus className="size-4" />
+   770→                )}
+   771→                {status === "in-review" ? "Send for review" : "Schedule"}
+   772→              </Button>
+   773→            </div>
+   774→          </div>
+   775→        </form>
+   776→      </SheetContent>
+   777→    </Sheet>
+   778→  );
+   779→}
+   780→

@@ -1,0 +1,198 @@
+// Cadence — Prisma schema (SQLite)
+// Note: SQLite does not support scalar lists; arrays are stored as JSON strings.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatarColor String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  memberships Membership[]
+  posts      Post[]
+  aiConversations AiConversation[]
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      String   @default("team")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  memberships Membership[]
+  accounts     SocialAccount[]
+  posts        Post[]
+  media        MediaAsset[]
+  campaigns    Campaign[]
+  inboxItems   InboxItem[]
+  integrations WorkspaceIntegration[]
+  activity     ActivityEvent[]
+  teamMembers  TeamMember[]
+}
+
+model Membership {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        String   @default("Editor") // Owner | Admin | Editor | Approver | Viewer
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  @@unique([userId, workspaceId])
+}
+
+model SocialAccount {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  platform     String   // x | instagram | linkedin | ...
+  handle       String
+  displayName  String
+  followers    Int      @default(0)
+  avatarColor  String?
+  connected    Boolean  @default(true)
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@unique([workspaceId, platform])
+}
+
+model Post {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  authorId     String?
+  text         String
+  scheduledAt  DateTime
+  status       String   @default("draft") // draft | scheduled | published | failed | in-review
+  platforms    String   @default("[]")    // JSON array of platform ids
+  mediaIds     String   @default("[]")    // JSON array of media ids
+  campaignId   String?
+  metricsJson  String?  // JSON PostMetrics
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author       User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  @@index([workspaceId, scheduledAt])
+  @@index([workspaceId, status])
+}
+
+model MediaAsset {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  type         String   @default("image") // image | video
+  url          String
+  thumbnailUrl String?
+  width        Int      @default(0)
+  height       Int      @default(0)
+  sizeKb       Int      @default(0)
+  tags         String   @default("[]") // JSON array
+  createdAt    DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Campaign {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  color        String
+  startDate    DateTime
+  endDate      DateTime
+  status       String   @default("planned")
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model InboxItem {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  platform     String
+  author       String
+  authorHandle String
+  text         String
+  type         String   @default("comment")
+  status       String   @default("open")
+  avatarColor  String?
+  createdAt    DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model TeamMember {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  email        String
+  role         String   @default("Editor")
+  avatarColor  String?
+  status       String   @default("active")
+  lastActive   DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model WorkspaceIntegration {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  description  String
+  category     String
+  connected    Boolean  @default(false)
+  accent       String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ActivityEvent {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  actor        String
+  action       String
+  target       String
+  icon         String   @default("publish")
+  createdAt    DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model AiConversation {
+  id        String   @id @default(cuid())
+  userId    String?
+  title     String   @default("Untitled conversation")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages  AiMessage[]
+}
+
+model AiMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String   // user | assistant | system
+  content        String
+  createdAt      DateTime @default(now())
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  kind      String   @default("info") // info | success | warning | error
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String
+  action    String
+  entity    String
+  entityId  String?
+  meta      String?
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,1183 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import {
+     5→  Area,
+     6→  AreaChart,
+     7→  CartesianGrid,
+     8→  Tooltip,
+     9→  XAxis,
+    10→  YAxis,
+    11→  ResponsiveContainer,
+    12→} from "recharts";
+    13→import {
+    14→  Eye,
+    15→  Users2,
+    16→  Heart,
+    17→  MousePointerClick,
+    18→  Download,
+    19→  ChevronDown,
+    20→  ChevronUp,
+    21→  ChevronRight,
+    22→  TrendingUp,
+    23→  Filter,
+    24→  Check,
+    25→  type LucideIcon,
+    26→} from "lucide-react";
+    27→import { format, parseISO } from "date-fns";
+    28→import { toast } from "sonner";
+    29→
+    30→import { cn } from "@/lib/utils";
+    31→import { useApp } from "@/lib/store";
+    32→import { useAnalytics, usePosts } from "@/hooks/use-api";
+    33→import { PLATFORMS, type PlatformId } from "@/lib/brand";
+    34→import { PlatformBadge } from "@/components/brand/platform-icon";
+    35→import { Button } from "@/components/ui/button";
+    36→import { Skeleton } from "@/components/ui/skeleton";
+    37→import { Badge } from "@/components/ui/badge";
+    38→import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+    39→import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+    40→import {
+    41→  Table,
+    42→  TableBody,
+    43→  TableCell,
+    44→  TableHead,
+    45→  TableHeader,
+    46→  TableRow,
+    47→} from "@/components/ui/table";
+    48→import {
+    49→  DonutChart,
+    50→  EmptyState,
+    51→  PageHeader,
+    52→  SectionCard,
+    53→  StatCard,
+    54→  Toolbar,
+    55→  formatCompact,
+    56→  formatDate,
+    57→} from "@/components/dashboard/shared";
+    58→import type { AnalyticsPoint, PlatformBreakdown, SocialPost } from "@/lib/types";
+    59→
+    60→/* ------------------------------------------------------------------ */
+    61→/* Constants & helpers                                                */
+    62→/* ------------------------------------------------------------------ */
+    63→
+    64→const PLATFORM_CHART_COLOR: Record<PlatformId, string> = {
+    65→  instagram: "var(--coral)",
+    66→  x: "var(--foreground)",
+    67→  linkedin: "var(--chart-1)",
+    68→  facebook: "var(--chart-5)",
+    69→  tiktok: "var(--primary)",
+    70→  youtube: "var(--coral)",
+    71→  threads: "var(--plum)",
+    72→  pinterest: "var(--amber-brand)",
+    73→};
+    74→
+    75→type RangeKey = "7" | "30" | "90";
+    76→const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
+    77→  { key: "7", label: "7d" },
+    78→  { key: "30", label: "30d" },
+    79→  { key: "90", label: "90d" },
+    80→];
+    81→
+    82→type MetricKey = "impressions" | "reach" | "engagement" | "clicks";
+    83→const METRIC_OPTIONS: {
+    84→  key: MetricKey;
+    85→  label: string;
+    86→  color: string;
+    87→  icon: LucideIcon;
+    88→}[] = [
+    89→  { key: "impressions", label: "Impressions", color: "var(--primary)", icon: Eye },
+    90→  { key: "reach", label: "Reach", color: "var(--mint)", icon: Users2 },
+    91→  { key: "engagement", label: "Engagement", color: "var(--coral)", icon: Heart },
+    92→  { key: "clicks", label: "Clicks", color: "var(--amber-brand)", icon: MousePointerClick },
+    93→];
+    94→
+    95→const pct = (now: number, prev: number) => {
+    96→  if (!prev) return 0;
+    97→  return ((now - prev) / prev) * 100;
+    98→};
+    99→
+   100→const sumKey = (arr: AnalyticsPoint[], key: keyof AnalyticsPoint) =>
+   101→  arr.reduce((acc, p) => acc + (Number(p[key]) || 0), 0);
+   102→
+   103→/* ------------------------------------------------------------------ */
+   104→/* Custom tooltip                                                     */
+   105→/* ------------------------------------------------------------------ */
+   106→
+   107→function ChartTooltip({
+   108→  active,
+   109→  payload,
+   110→  label,
+   111→  valueFormatter,
+   112→}: {
+   113→  active?: boolean;
+   114→  payload?: any[];
+   115→  label?: string;
+   116→  valueFormatter?: (n: number) => string;
+   117→}) {
+   118→  if (!active || !payload || payload.length === 0) return null;
+   119→  const fmt = valueFormatter ?? formatCompact;
+   120→  return (
+   121→    <div className="rounded-lg border border-border bg-popover/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
+   122→      {label && (
+   123→        <p className="mb-1 font-medium text-foreground">{label}</p>
+   124→      )}
+   125→      <ul className="space-y-1">
+   126→        {payload.map((p, i) => (
+   127→          <li key={i} className="flex items-center gap-2">
+   128→            <span
+   129→              className="size-2 rounded-full"
+   130→              style={{ background: p.color ?? p.stroke ?? p.fill }}
+   131→            />
+   132→            <span className="text-muted-foreground">{p.name}</span>
+   133→            <span className="ml-auto font-medium tabular-nums text-foreground">
+   134→              {fmt(Number(p.value))}
+   135→            </span>
+   136→          </li>
+   137→        ))}
+   138→      </ul>
+   139→    </div>
+   140→  );
+   141→}
+   142→
+   143→/* ------------------------------------------------------------------ */
+   144→/* Platform filter popover                                            */
+   145→/* ------------------------------------------------------------------ */
+   146→
+   147→function PlatformFilter({
+   148→  selected,
+   149→  onChange,
+   150→  options,
+   151→}: {
+   152→  selected: PlatformId[];
+   153→  onChange: (next: PlatformId[]) => void;
+   154→  options: PlatformId[];
+   155→}) {
+   156→  const [open, setOpen] = React.useState(false);
+   157→
+   158→  const toggle = (p: PlatformId) => {
+   159→    onChange(
+   160→      selected.includes(p)
+   161→        ? selected.filter((x) => x !== p)
+   162→        : [...selected, p]
+   163→    );
+   164→  };
+   165→
+   166→  const label =
+   167→    selected.length === 0
+   168→      ? "All platforms"
+   169→      : selected.length === 1
+   170→        ? PLATFORMS[selected[0]].name
+   171→        : `${selected.length} platforms`;
+   172→
+   173→  return (
+   174→    <Popover open={open} onOpenChange={setOpen}>
+   175→      <PopoverTrigger asChild>
+   176→        <Button variant="outline" size="sm" className="h-8 gap-1.5">
+   177→          <Filter className="size-3.5" />
+   178→          {label}
+   179→          <ChevronDown className="size-3.5 opacity-60" />
+   180→        </Button>
+   181→      </PopoverTrigger>
+   182→      <PopoverContent align="start" className="w-56 p-1">
+   183→        <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+   184→          Filter by platform
+   185→        </div>
+   186→        <div className="max-h-72 overflow-y-auto scrollbar-cadence">
+   187→          {options.map((p) => {
+   188→            const checked = selected.includes(p);
+   189→            return (
+   190→              <button
+   191→                key={p}
+   192→                type="button"
+   193→                role="checkbox"
+   194→                aria-checked={checked}
+   195→                onClick={() => toggle(p)}
+   196→                className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+   197→              >
+   198→                <span
+   199→                  className={cn(
+   200→                    "flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+   201→                    checked
+   202→                      ? "border-primary bg-primary text-primary-foreground"
+   203→                      : "border-input bg-background"
+   204→                  )}
+   205→                >
+   206→                  {checked && <Check className="size-3" />}
+   207→                </span>
+   208→                <PlatformBadge platform={p} className="size-5" />
+   209→                <span className="flex-1 text-foreground">
+   210→                  {PLATFORMS[p].name}
+   211→                </span>
+   212→              </button>
+   213→            );
+   214→          })}
+   215→        </div>
+   216→        <div className="mt-1 flex items-center justify-between gap-2 border-t border-border/60 px-2 py-2">
+   217→          <Button
+   218→            variant="ghost"
+   219→            size="sm"
+   220→            className="h-7 px-2 text-xs"
+   221→            onClick={() => onChange([])}
+   222→            disabled={selected.length === 0}
+   223→          >
+   224→            Clear
+   225→          </Button>
+   226→          <Button
+   227→            size="sm"
+   228→            className="h-7 px-2 text-xs"
+   229→            onClick={() => setOpen(false)}
+   230→          >
+   231→            Done
+   232→          </Button>
+   233→        </div>
+   234→      </PopoverContent>
+   235→    </Popover>
+   236→  );
+   237→}
+   238→
+   239→/* ------------------------------------------------------------------ */
+   240→/* KPI row                                                            */
+   241→/* ------------------------------------------------------------------ */
+   242→
+   243→function KpiRow({
+   244→  series,
+   245→  isLoading,
+   246→}: {
+   247→  series: AnalyticsPoint[];
+   248→  isLoading: boolean;
+   249→}) {
+   250→  if (isLoading) {
+   251→    return (
+   252→      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+   253→        {Array.from({ length: 4 }).map((_, i) => (
+   254→          <div
+   255→            key={i}
+   256→            className="shimmer rounded-xl border border-border/60 bg-card p-5"
+   257→          >
+   258→            <Skeleton className="h-3 w-24" />
+   259→            <Skeleton className="mt-3 h-7 w-28" />
+   260→            <Skeleton className="mt-4 h-3 w-20" />
+   261→          </div>
+   262→        ))}
+   263→      </div>
+   264→    );
+   265→  }
+   266→
+   267→  const half = Math.floor(series.length / 2);
+   268→  const nowArr = series.slice(half);
+   269→  const prevArr = series.slice(0, half);
+   270→  // Provide a 14-point spark window (or whatever's available)
+   271→  const spark = (key: keyof AnalyticsPoint) =>
+   272→    series.slice(-14).map((p) => Number(p[key]));
+   273→
+   274→  const kpis = [
+   275→    {
+   276→      label: "Impressions",
+   277→      value: formatCompact(sumKey(nowArr, "impressions")),
+   278→      delta: pct(sumKey(nowArr, "impressions"), sumKey(prevArr, "impressions")),
+   279→      deltaLabel: "vs prev period",
+   280→      icon: Eye,
+   281→      accent: "text-primary",
+   282→      spark: spark("impressions"),
+   283→    },
+   284→    {
+   285→      label: "Reach",
+   286→      value: formatCompact(sumKey(nowArr, "reach")),
+   287→      delta: pct(sumKey(nowArr, "reach"), sumKey(prevArr, "reach")),
+   288→      deltaLabel: "vs prev period",
+   289→      icon: Users2,
+   290→      accent: "text-mint",
+   291→      spark: spark("reach"),
+   292→    },
+   293→    {
+   294→      label: "Engagement",
+   295→      value: formatCompact(sumKey(nowArr, "engagement")),
+   296→      delta: pct(
+   297→        sumKey(nowArr, "engagement"),
+   298→        sumKey(prevArr, "engagement")
+   299→      ),
+   300→      deltaLabel: "vs prev period",
+   301→      icon: Heart,
+   302→      accent: "text-coral",
+   303→      spark: spark("engagement"),
+   304→    },
+   305→    {
+   306→      label: "Clicks",
+   307→      value: formatCompact(sumKey(nowArr, "clicks")),
+   308→      delta: pct(sumKey(nowArr, "clicks"), sumKey(prevArr, "clicks")),
+   309→      deltaLabel: "vs prev period",
+   310→      icon: MousePointerClick,
+   311→      accent: "text-amber-brand",
+   312→      spark: spark("clicks"),
+   313→    },
+   314→  ];
+   315→
+   316→  return (
+   317→    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+   318→      {kpis.map((k) => (
+   319→        <StatCard key={k.label} {...k} />
+   320→      ))}
+   321→    </div>
+   322→  );
+   323→}
+   324→
+   325→/* ------------------------------------------------------------------ */
+   326→/* Main composed chart with metric toggle                             */
+   327→/* ------------------------------------------------------------------ */
+   328→
+   329→function MainPerformanceChart({
+   330→  series,
+   331→  metric,
+   332→  onMetricChange,
+   333→  isLoading,
+   334→}: {
+   335→  series: AnalyticsPoint[];
+   336→  metric: MetricKey;
+   337→  onMetricChange: (m: MetricKey) => void;
+   338→  isLoading: boolean;
+   339→}) {
+   340→  const meta = METRIC_OPTIONS.find((m) => m.key === metric)!;
+   341→  const data = React.useMemo(
+   342→    () =>
+   343→      series.map((p) => ({
+   344→        date: format(parseISO(p.date), "MMM d"),
+   345→        value: Number(p[metric]),
+   346→      })),
+   347→    [series, metric]
+   348→  );
+   349→
+   350→  const total = React.useMemo(
+   351→    () => data.reduce((acc, d) => acc + d.value, 0),
+   352→    [data]
+   353→  );
+   354→
+   355→  // show every Nth tick depending on density
+   356→  const tickInterval = Math.max(0, Math.floor(data.length / 8) - 1);
+   357→
+   358→  const uid = React.useId().replace(/:/g, "");
+   359→  const gradId = `area-grad-${uid}`;
+   360→
+   361→  return (
+   362→    <SectionCard
+   363→      title="Performance over time"
+   364→      description="Daily totals across every connected channel"
+   365→      actions={
+   366→        <div className="flex items-center gap-0.5 rounded-lg border border-border/70 bg-muted/40 p-0.5">
+   367→          {METRIC_OPTIONS.map((m) => {
+   368→            const active = m.key === metric;
+   369→            const Icon = m.icon;
+   370→            return (
+   371→              <button
+   372→                key={m.key}
+   373→                type="button"
+   374→                onClick={() => onMetricChange(m.key)}
+   375→                aria-pressed={active}
+   376→                className={cn(
+   377→                  "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors",
+   378→                  active
+   379→                    ? "bg-background text-foreground shadow-sm"
+   380→                    : "text-muted-foreground hover:text-foreground"
+   381→                )}
+   382→                style={active ? { color: m.color } : undefined}
+   383→              >
+   384→                <Icon className="size-3.5" />
+   385→                <span className="hidden sm:inline">{m.label}</span>
+   386→              </button>
+   387→            );
+   388→          })}
+   389→        </div>
+   390→      }
+   391→      bodyClassName="p-4 sm:p-5"
+   392→    >
+   393→      {isLoading ? (
+   394→        <Skeleton className="h-72 w-full rounded-xl" />
+   395→      ) : data.length === 0 ? (
+   396→        <EmptyState
+   397→          icon={TrendingUp}
+   398→          title="No performance data yet"
+   399→          description="Connect a channel and publish a post to see daily metrics here."
+   400→        />
+   401→      ) : (
+   402→        <div className="space-y-3">
+   403→          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+   404→            <div>
+   405→              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+   406→                {meta.label} · total
+   407→              </p>
+   408→              <p
+   409→                className="text-2xl font-semibold tabular-nums"
+   410→                style={{ color: meta.color }}
+   411→              >
+   412→                {formatCompact(total)}
+   413→              </p>
+   414→            </div>
+   415→            <p className="text-xs text-muted-foreground">
+   416→              {data.length} day window · avg{" "}
+   417→              <span className="font-medium tabular-nums text-foreground">
+   418→                {formatCompact(total / Math.max(1, data.length))}
+   419→              </span>{" "}
+   420→              / day
+   421→            </p>
+   422→          </div>
+   423→          <div
+   424→            className="h-72 w-full"
+   425→            role="img"
+   426→            aria-label={`Daily ${meta.label} for the last ${data.length} days`}
+   427→          >
+   428→            <ResponsiveContainer width="100%" height="100%">
+   429→              <AreaChart
+   430→                data={data}
+   431→                margin={{ top: 8, right: 12, bottom: 0, left: -8 }}
+   432→              >
+   433→                <defs>
+   434→                  <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+   435→                    <stop
+   436→                      offset="0%"
+   437→                      stopColor={meta.color}
+   438→                      stopOpacity={0.32}
+   439→                    />
+   440→                    <stop
+   441→                      offset="100%"
+   442→                      stopColor={meta.color}
+   443→                      stopOpacity={0}
+   444→                    />
+   445→                  </linearGradient>
+   446→                </defs>
+   447→                <CartesianGrid
+   448→                  strokeDasharray="3 3"
+   449→                  stroke="var(--border)"
+   450→                  vertical={false}
+   451→                />
+   452→                <XAxis
+   453→                  dataKey="date"
+   454→                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+   455→                  tickLine={false}
+   456→                  axisLine={false}
+   457→                  interval={tickInterval}
+   458→                  minTickGap={8}
+   459→                />
+   460→                <YAxis
+   461→                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+   462→                  tickLine={false}
+   463→                  axisLine={false}
+   464→                  width={48}
+   465→                  tickFormatter={(v) => formatCompact(Number(v))}
+   466→                />
+   467→                <Tooltip
+   468→                  cursor={{ stroke: "var(--border)", strokeWidth: 1 }}
+   469→                  content={
+   470→                    <ChartTooltip
+   471→                      valueFormatter={formatCompact}
+   472→                    />
+   473→                  }
+   474→                />
+   475→                <Area
+   476→                  type="monotone"
+   477→                  dataKey="value"
+   478→                  name={meta.label}
+   479→                  stroke={meta.color}
+   480→                  strokeWidth={2.2}
+   481→                  fill={`url(#${gradId})`}
+   482→                  isAnimationActive={false}
+   483→                  dot={false}
+   484→                  activeDot={{
+   485→                    r: 4,
+   486→                    stroke: "var(--background)",
+   487→                    strokeWidth: 2,
+   488→                    fill: meta.color,
+   489→                  }}
+   490→                />
+   491→              </AreaChart>
+   492→            </ResponsiveContainer>
+   493→          </div>
+   494→        </div>
+   495→      )}
+   496→    </SectionCard>
+   497→  );
+   498→}
+   499→
+   500→/* ------------------------------------------------------------------ */
+   501→/* Engagement rate trend line chart                                   */
+   502→/* ------------------------------------------------------------------ */
+   503→
+   504→function EngagementRateTrend({
+   505→  series,
+   506→  isLoading,
+   507→}: {
+   508→  series: AnalyticsPoint[];
+   509→  isLoading: boolean;
+   510→}) {
+   511→  const data = React.useMemo(
+   512→    () =>
+   513→      series.map((p) => ({
+   514→        date: format(parseISO(p.date), "MMM d"),
+   515→        rate: p.reach > 0 ? (p.engagement / p.reach) * 100 : 0,
+   516→      })),
+   517→    [series]
+   518→  );
+   519→  const avg = React.useMemo(
+   520→    () =>
+   521→      data.length === 0
+   522→        ? 0
+   523→        : data.reduce((a, b) => a + b.rate, 0) / data.length,
+   524→    [data]
+   525→  );
+   526→  const tickInterval = Math.max(0, Math.floor(data.length / 6) - 1);
+   527→
+   528→  return (
+   529→    <SectionCard
+   530→      title="Engagement rate trend"
+   531→      description="Engagement ÷ reach, as a daily percentage"
+   532→    >
+   533→      {isLoading ? (
+   534→        <Skeleton className="h-56 w-full rounded-xl" />
+   535→      ) : data.length === 0 ? (
+   536→        <EmptyState
+   537→          icon={Heart}
+   538→          title="No engagement data"
+   539→          description="Engagement rate will appear once you have impressions and reach."
+   540→        />
+   541→      ) : (
+   542→        <div className="space-y-3">
+   543→          <div className="flex items-baseline gap-2">
+   544→            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+   545→              Avg rate
+   546→            </span>
+   547→            <span className="text-xl font-semibold tabular-nums text-coral">
+   548→              {avg.toFixed(2)}%
+   549→            </span>
+   550→          </div>
+   551→          <div
+   552→            className="h-56 w-full"
+   553→            role="img"
+   554→            aria-label="Daily engagement rate over the selected window"
+   555→          >
+   556→            <ResponsiveContainer width="100%" height="100%">
+   557→              <AreaChart
+   558→                data={data}
+   559→                margin={{ top: 6, right: 8, bottom: 0, left: -10 }}
+   560→              >
+   561→                <defs>
+   562→                  <linearGradient id="er-grad" x1="0" y1="0" x2="0" y2="1">
+   563→                    <stop offset="0%" stopColor="var(--coral)" stopOpacity={0.3} />
+   564→                    <stop offset="100%" stopColor="var(--coral)" stopOpacity={0} />
+   565→                  </linearGradient>
+   566→                </defs>
+   567→                <CartesianGrid
+   568→                  strokeDasharray="3 3"
+   569→                  stroke="var(--border)"
+   570→                  vertical={false}
+   571→                />
+   572→                <XAxis
+   573→                  dataKey="date"
+   574→                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+   575→                  tickLine={false}
+   576→                  axisLine={false}
+   577→                  interval={tickInterval}
+   578→                  minTickGap={8}
+   579→                />
+   580→                <YAxis
+   581→                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+   582→                  tickLine={false}
+   583→                  axisLine={false}
+   584→                  width={40}
+   585→                  tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
+   586→                />
+   587→                <Tooltip
+   588→                  cursor={{ stroke: "var(--border)", strokeWidth: 1 }}
+   589→                  content={
+   590→                    <ChartTooltip
+   591→                      valueFormatter={(n) => `${n.toFixed(2)}%`}
+   592→                    />
+   593→                  }
+   594→                />
+   595→                <Area
+   596→                  type="monotone"
+   597→                  dataKey="rate"
+   598→                  name="Engagement rate"
+   599→                  stroke="var(--coral)"
+   600→                  strokeWidth={2.2}
+   601→                  fill="url(#er-grad)"
+   602→                  isAnimationActive={false}
+   603→                  dot={false}
+   604→                  activeDot={{
+   605→                    r: 4,
+   606→                    stroke: "var(--background)",
+   607→                    strokeWidth: 2,
+   608→                    fill: "var(--coral)",
+   609→                  }}
+   610→                />
+   611→              </AreaChart>
+   612→            </ResponsiveContainer>
+   613→          </div>
+   614→        </div>
+   615→      )}
+   616→    </SectionCard>
+   617→  );
+   618→}
+   619→
+   620→/* ------------------------------------------------------------------ */
+   621→/* Impressions by platform donut + legend                             */
+   622→/* ------------------------------------------------------------------ */
+   623→
+   624→function ImpressionsByPlatform({
+   625→  breakdown,
+   626→  isLoading,
+   627→}: {
+   628→  breakdown: PlatformBreakdown[];
+   629→  isLoading: boolean;
+   630→}) {
+   631→  const data = React.useMemo(
+   632→    () =>
+   633→      breakdown
+   634→        .map((b) => ({
+   635→          name: PLATFORMS[b.platform]?.name ?? b.platform,
+   636→          value: b.impressions,
+   637→          color: PLATFORM_CHART_COLOR[b.platform] ?? "var(--muted-foreground)",
+   638→          platform: b.platform,
+   639→        }))
+   640→        .sort((a, b) => b.value - a.value),
+   641→    [breakdown]
+   642→  );
+   643→  const total = data.reduce((acc, d) => acc + d.value, 0);
+   644→
+   645→  return (
+   646→    <SectionCard
+   647→      title="Impressions by platform"
+   648→      description="Share of voice across channels"
+   649→    >
+   650→      {isLoading ? (
+   651→        <div className="flex items-center gap-4">
+   652→          <Skeleton className="size-36 rounded-full" />
+   653→          <div className="flex-1 space-y-2">
+   654→            {Array.from({ length: 5 }).map((_, i) => (
+   655→              <Skeleton key={i} className="h-3 w-full" />
+   656→            ))}
+   657→          </div>
+   658→        </div>
+   659→      ) : data.length === 0 ? (
+   660→        <EmptyState
+   661→          icon={Eye}
+   662→          title="No platform breakdown"
+   663→          description="Connect a channel to start collecting per-platform impressions."
+   664→        />
+   665→      ) : (
+   666→        <div className="flex flex-col items-center gap-4 sm:flex-row">
+   667→          <div className="relative h-[180px] w-[180px] shrink-0">
+   668→            <DonutChart data={data} height={180} />
+   669→            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+   670→              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+   671→                Total
+   672→              </span>
+   673→              <span className="text-lg font-semibold tabular-nums">
+   674→                {formatCompact(total)}
+   675→              </span>
+   676→            </div>
+   677→          </div>
+   678→          <ul className="flex-1 space-y-1.5">
+   679→            {data.map((d) => (
+   680→              <li
+   681→                key={d.platform}
+   682→                className="flex items-center gap-2 text-xs"
+   683→              >
+   684→                <PlatformBadge platform={d.platform} className="size-5" />
+   685→                <span className="flex-1 text-foreground">{d.name}</span>
+   686→                <span className="tabular-nums text-muted-foreground">
+   687→                  {formatCompact(d.value)}
+   688→                </span>
+   689→                <span className="w-10 text-right tabular-nums text-muted-foreground">
+   690→                  {total === 0 ? 0 : ((d.value / total) * 100).toFixed(0)}%
+   691→                </span>
+   692→              </li>
+   693→            ))}
+   694→          </ul>
+   695→        </div>
+   696→      )}
+   697→    </SectionCard>
+   698→  );
+   699→}
+   700→
+   701→/* ------------------------------------------------------------------ */
+   702→/* Platform breakdown table (sortable)                                */
+   703→/* ------------------------------------------------------------------ */
+   704→
+   705→type SortKey = "platform" | "followers" | "posts" | "impressions" | "rate";
+   706→type SortDir = "asc" | "desc";
+   707→
+   708→function SortHeader({
+   709→  label,
+   710→  keyName,
+   711→  sortKey,
+   712→  sortDir,
+   713→  onToggle,
+   714→  align = "left",
+   715→}: {
+   716→  label: string;
+   717→  keyName: SortKey;
+   718→  sortKey: SortKey;
+   719→  sortDir: SortDir;
+   720→  onToggle: (key: SortKey) => void;
+   721→  align?: "left" | "right";
+   722→}) {
+   723→  const active = sortKey === keyName;
+   724→  return (
+   725→    <TableHead className={align === "right" ? "text-right" : ""}>
+   726→      <button
+   727→        type="button"
+   728→        onClick={() => onToggle(keyName)}
+   729→        className={cn(
+   730→          "inline-flex items-center gap-1 rounded text-xs font-medium uppercase tracking-wide transition-colors hover:text-foreground",
+   731→          active ? "text-foreground" : "text-muted-foreground",
+   732→          align === "right" ? "flex-row-reverse" : ""
+   733→        )}
+   734→      >
+   735→        {label}
+   736→        {active &&
+   737→          (sortDir === "asc" ? (
+   738→            <ChevronUp className="size-3.5" />
+   739→          ) : (
+   740→            <ChevronDown className="size-3.5" />
+   741→          ))}
+   742→      </button>
+   743→    </TableHead>
+   744→  );
+   745→}
+   746→
+   747→function PlatformBreakdownTable({
+   748→  breakdown,
+   749→  isLoading,
+   750→}: {
+   751→  breakdown: PlatformBreakdown[];
+   752→  isLoading: boolean;
+   753→}) {
+   754→  const [sortKey, setSortKey] = React.useState<SortKey>("impressions");
+   755→  const [sortDir, setSortDir] = React.useState<SortDir>("desc");
+   756→
+   757→  const rows = React.useMemo(() => {
+   758→    const arr = [...breakdown];
+   759→    arr.sort((a, b) => {
+   760→      let av: number | string;
+   761→      let bv: number | string;
+   762→      switch (sortKey) {
+   763→        case "platform":
+   764→          av = PLATFORMS[a.platform]?.name ?? a.platform;
+   765→          bv = PLATFORMS[b.platform]?.name ?? b.platform;
+   766→          break;
+   767→        case "followers":
+   768→          av = a.followers;
+   769→          bv = b.followers;
+   770→          break;
+   771→        case "posts":
+   772→          av = a.posts;
+   773→          bv = b.posts;
+   774→          break;
+   775→        case "rate":
+   776→          av = a.engagementRate;
+   777→          bv = b.engagementRate;
+   778→          break;
+   779→        default:
+   780→          av = a.impressions;
+   781→          bv = b.impressions;
+   782→      }
+   783→      if (typeof av === "string" && typeof bv === "string") {
+   784→        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+   785→      }
+   786→      return sortDir === "asc"
+   787→        ? (av as number) - (bv as number)
+   788→        : (bv as number) - (av as number);
+   789→    });
+   790→    return arr;
+   791→  }, [breakdown, sortKey, sortDir]);
+   792→
+   793→  const maxImpressions = React.useMemo(
+   794→    () => rows.reduce((m, r) => Math.max(m, r.impressions), 0),
+   795→    [rows]
+   796→  );
+   797→
+   798→  const toggleSort = (key: SortKey) => {
+   799→    if (key === sortKey) {
+   800→      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+   801→    } else {
+   802→      setSortKey(key);
+   803→      setSortDir(key === "platform" ? "asc" : "desc");
+   804→    }
+   805→  };
+   806→
+   807→  return (
+   808→    <SectionCard
+   809→      title="Platform breakdown"
+   810→      description="Per-channel followers, posting cadence and impressions"
+   811→      bodyClassName="p-0"
+   812→    >
+   813→      {isLoading ? (
+   814→        <div className="space-y-2 p-5">
+   815→          {Array.from({ length: 5 }).map((_, i) => (
+   816→            <Skeleton key={i} className="h-10 w-full rounded-md" />
+   817→          ))}
+   818→        </div>
+   819→      ) : rows.length === 0 ? (
+   820→        <div className="p-5">
+   821→          <EmptyState
+   822→            icon={Users2}
+   823→            title="No connected channels"
+   824→            description="Connect a social account to see a per-platform breakdown."
+   825→          />
+   826→        </div>
+   827→      ) : (
+   828→        <Table>
+   829→          <TableHeader>
+   830→            <TableRow className="hover:bg-transparent">
+   831→              <SortHeader
+   832→                label="Platform"
+   833→                keyName="platform"
+   834→                sortKey={sortKey}
+   835→                sortDir={sortDir}
+   836→                onToggle={toggleSort}
+   837→              />
+   838→              <SortHeader
+   839→                label="Followers"
+   840→                keyName="followers"
+   841→                sortKey={sortKey}
+   842→                sortDir={sortDir}
+   843→                onToggle={toggleSort}
+   844→                align="right"
+   845→              />
+   846→              <SortHeader
+   847→                label="Posts"
+   848→                keyName="posts"
+   849→                sortKey={sortKey}
+   850→                sortDir={sortDir}
+   851→                onToggle={toggleSort}
+   852→                align="right"
+   853→              />
+   854→              <SortHeader
+   855→                label="Impressions"
+   856→                keyName="impressions"
+   857→                sortKey={sortKey}
+   858→                sortDir={sortDir}
+   859→                onToggle={toggleSort}
+   860→                align="right"
+   861→              />
+   862→              <SortHeader
+   863→                label="Eng. rate"
+   864→                keyName="rate"
+   865→                sortKey={sortKey}
+   866→                sortDir={sortDir}
+   867→                onToggle={toggleSort}
+   868→                align="right"
+   869→              />
+   870→            </TableRow>
+   871→          </TableHeader>
+   872→          <TableBody>
+   873→            {rows.map((r) => {
+   874→              const widthPct =
+   875→                maxImpressions === 0
+   876→                  ? 0
+   877→                  : (r.impressions / maxImpressions) * 100;
+   878→              return (
+   879→                <TableRow key={r.platform}>
+   880→                  <TableCell>
+   881→                    <div className="flex items-center gap-2.5">
+   882→                      <PlatformBadge platform={r.platform} className="size-7" />
+   883→                      <div className="flex flex-col">
+   884→                        <span className="text-sm font-medium text-foreground">
+   885→                          {PLATFORMS[r.platform]?.name ?? r.platform}
+   886→                        </span>
+   887→                        <span className="text-[10px] text-muted-foreground">
+   888→                          {r.posts} posts
+   889→                        </span>
+   890→                      </div>
+   891→                    </div>
+   892→                  </TableCell>
+   893→                  <TableCell className="text-right tabular-nums">
+   894→                    {formatCompact(r.followers)}
+   895→                  </TableCell>
+   896→                  <TableCell className="text-right tabular-nums text-muted-foreground">
+   897→                    {r.posts}
+   898→                  </TableCell>
+   899→                  <TableCell>
+   900→                    <div className="flex items-center justify-end gap-2">
+   901→                      <div className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-muted sm:block">
+   902→                        <div
+   903→                          className="h-full rounded-full"
+   904→                          style={{
+   905→                            width: `${widthPct}%`,
+   906→                            background: "var(--primary)",
+   907→                          }}
+   908→                        />
+   909→                      </div>
+   910→                      <span className="tabular-nums text-foreground">
+   911→                        {formatCompact(r.impressions)}
+   912→                      </span>
+   913→                    </div>
+   914→                  </TableCell>
+   915→                  <TableCell className="text-right">
+   916→                    <Badge
+   917→                      variant="outline"
+   918→                      className="font-medium tabular-nums"
+   919→                    >
+   920→                      {r.engagementRate.toFixed(2)}%
+   921→                    </Badge>
+   922→                  </TableCell>
+   923→                </TableRow>
+   924→              );
+   925→            })}
+   926→          </TableBody>
+   927→        </Table>
+   928→      )}
+   929→    </SectionCard>
+   930→  );
+   931→}
+   932→
+   933→/* ------------------------------------------------------------------ */
+   934→/* Top performing posts                                               */
+   935→/* ------------------------------------------------------------------ */
+   936→
+   937→function TopPerformingPosts({ isLoading }: { isLoading: boolean }) {
+   938→  const { data, isLoading: postsLoading } = usePosts({ status: "published" });
+   939→  const openComposer = useApp((s) => s.openComposer);
+   940→
+   941→  const posts: SocialPost[] = React.useMemo(() => {
+   942→    const all = data?.posts ?? [];
+   943→    return all
+   944→      .filter((p) => p.metrics)
+   945→      .sort(
+   946→        (a, b) =>
+   947→          (b.metrics?.impressions ?? 0) - (a.metrics?.impressions ?? 0)
+   948→      )
+   949→      .slice(0, 6);
+   950→  }, [data]);
+   951→
+   952→  const loading = isLoading || postsLoading;
+   953→
+   954→  return (
+   955→    <SectionCard
+   956→      title="Top performing posts"
+   957→      description="The 6 published posts with the most impressions"
+   958→      actions={
+   959→        <Button
+   960→          variant="ghost"
+   961→          size="sm"
+   962→          className="text-xs"
+   963→          onClick={() => useApp.getState().setView("queue")}
+   964→        >
+   965→          Open queue
+   966→          <ChevronRight className="size-3.5" />
+   967→        </Button>
+   968→      }
+   969→      bodyClassName="p-0"
+   970→    >
+   971→      {loading ? (
+   972→        <div className="space-y-2 p-5">
+   973→          {Array.from({ length: 6 }).map((_, i) => (
+   974→            <Skeleton key={i} className="h-12 w-full rounded-md" />
+   975→          ))}
+   976→        </div>
+   977→      ) : posts.length === 0 ? (
+   978→        <div className="p-5">
+   979→          <EmptyState
+   980→            icon={TrendingUp}
+   981→            title="No published posts with metrics yet"
+   982→            description="Once posts go live, your top performers will show up here."
+   983→          />
+   984→        </div>
+   985→      ) : (
+   986→        <ul className="divide-y divide-border/60">
+   987→          {posts.map((p, idx) => {
+   988→            const m = p.metrics!;
+   989→            const eng = m.likes + m.comments + m.shares + m.saves;
+   990→            const er = m.reach > 0 ? (eng / m.reach) * 100 : 0;
+   991→            return (
+   992→              <li key={p.id}>
+   993→                <button
+   994→                  type="button"
+   995→                  onClick={() => openComposer(p.id)}
+   996→                  className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40 sm:px-5"
+   997→                >
+   998→                  <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
+   999→                    {idx + 1}
+  1000→                  </span>
+  1001→                  <div className="min-w-0 flex-1">
+  1002→                    <p className="line-clamp-1 text-sm text-foreground">
+  1003→                      {p.text}
+  1004→                    </p>
+  1005→                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+  1006→                      <div className="flex -space-x-1.5">
+  1007→                        {p.platforms.slice(0, 3).map((pl) => (
+  1008→                          <PlatformBadge
+  1009→                            key={pl}
+  1010→                            platform={pl}
+  1011→                            className="size-4 ring-2 ring-background"
+  1012→                          />
+  1013→                        ))}
+  1014→                      </div>
+  1015→                      <span aria-hidden="true">·</span>
+  1016→                      <span className="tabular-nums">
+  1017→                        {formatDate(p.scheduledAt, "MMM d")}
+  1018→                      </span>
+  1019→                    </div>
+  1020→                  </div>
+  1021→                  <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+  1022→                    <span className="text-sm font-semibold tabular-nums text-foreground">
+  1023→                      {formatCompact(m.impressions)}
+  1024→                    </span>
+  1025→                    <span className="text-[10px] tabular-nums text-muted-foreground">
+  1026→                      {formatCompact(eng)} eng · {er.toFixed(1)}%
+  1027→                    </span>
+  1028→                  </div>
+  1029→                </button>
+  1030→              </li>
+  1031→            );
+  1032→          })}
+  1033→        </ul>
+  1034→      )}
+  1035→    </SectionCard>
+  1036→  );
+  1037→}
+  1038→
+  1039→/* ------------------------------------------------------------------ */
+  1040→/* Toolbar                                                            */
+  1041→/* ------------------------------------------------------------------ */
+  1042→
+  1043→function AnalyticsToolbar({
+  1044→  range,
+  1045→  onRangeChange,
+  1046→  platforms,
+  1047→  onPlatformsChange,
+  1048→  platformOptions,
+  1049→}: {
+  1050→  range: RangeKey;
+  1051→  onRangeChange: (r: RangeKey) => void;
+  1052→  platforms: PlatformId[];
+  1053→  onPlatformsChange: (p: PlatformId[]) => void;
+  1054→  platformOptions: PlatformId[];
+  1055→}) {
+  1056→  return (
+  1057→    <Toolbar
+  1058→      trailing={
+  1059→        <Button
+  1060→          variant="outline"
+  1061→          size="sm"
+  1062→          className="h-8"
+  1063→          onClick={() => toast.info("Exporting CSV…", {
+  1064→            description: "Your analytics export will download in a moment.",
+  1065→          })}
+  1066→        >
+  1067→          <Download className="size-3.5" />
+  1068→          Export CSV
+  1069→        </Button>
+  1070→      }
+  1071→    >
+  1072→      <ToggleGroup
+  1073→        type="single"
+  1074→        value={range}
+  1075→        onValueChange={(v) => v && onRangeChange(v as RangeKey)}
+  1076→        className="rounded-md border border-border/70 bg-muted/40 p-0.5"
+  1077→        size="sm"
+  1078→      >
+  1079→        {RANGE_OPTIONS.map((r) => (
+  1080→          <ToggleGroupItem
+  1081→            key={r.key}
+  1082→            value={r.key}
+  1083→            className="h-7 px-3 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm"
+  1084→          >
+  1085→            {r.label}
+  1086→          </ToggleGroupItem>
+  1087→        ))}
+  1088→      </ToggleGroup>
+  1089→      <PlatformFilter
+  1090→        selected={platforms}
+  1091→        onChange={onPlatformsChange}
+  1092→        options={platformOptions}
+  1093→      />
+  1094→    </Toolbar>
+  1095→  );
+  1096→}
+  1097→
+  1098→/* ------------------------------------------------------------------ */
+  1099→/* Main view                                                          */
+  1100→/* ------------------------------------------------------------------ */
+  1101→
+  1102→export function AnalyticsView() {
+  1103→  const { data, isLoading } = useAnalytics();
+  1104→  const allSeries = data?.timeseries ?? [];
+  1105→  const breakdown = data?.breakdown ?? [];
+  1106→
+  1107→  const [range, setRange] = React.useState<RangeKey>("30");
+  1108→  const [platforms, setPlatforms] = React.useState<PlatformId[]>([]);
+  1109→  const [metric, setMetric] = React.useState<MetricKey>("impressions");
+  1110→
+  1111→  const platformOptions = React.useMemo(
+  1112→    () => breakdown.map((b) => b.platform),
+  1113→    [breakdown]
+  1114→  );
+  1115→
+  1116→  // Slice the visible window from the timeseries (mock always has 30 points).
+  1117→  const rangeN = Number(range);
+  1118→  const visibleSeries = React.useMemo(
+  1119→    () => allSeries.slice(-rangeN),
+  1120→    [allSeries, rangeN]
+  1121→  );
+  1122→
+  1123→  // For platform filter, we only have aggregate breakdown — but we can still
+  1124→  // honor the filter by hiding rows whose platform isn't selected (UI-level).
+  1125→  const filteredBreakdown = React.useMemo(() => {
+  1126→    if (platforms.length === 0) return breakdown;
+  1127→    return breakdown.filter((b) => platforms.includes(b.platform));
+  1128→  }, [breakdown, platforms]);
+  1129→
+  1130→  return (
+  1131→    <div className="space-y-6">
+  1132→      <PageHeader
+  1133→        title="Analytics"
+  1134→        description="Cross-channel performance with custom date ranges, segments and exports."
+  1135→        actions={
+  1136→          <Button
+  1137→            variant="outline"
+  1138→            size="sm"
+  1139→            onClick={() => toast.info("Exporting CSV…", {
+  1140→              description: "Your analytics export will download in a moment.",
+  1141→            })}
+  1142→          >
+  1143→            <Download className="size-4" />
+  1144→            Export
+  1145→          </Button>
+  1146→        }
+  1147→      />
+  1148→
+  1149→      <AnalyticsToolbar
+  1150→        range={range}
+  1151→        onRangeChange={setRange}
+  1152→        platforms={platforms}
+  1153→        onPlatformsChange={setPlatforms}
+  1154→        platformOptions={platformOptions}
+  1155→      />
+  1156→
+  1157→      <KpiRow series={visibleSeries} isLoading={isLoading} />
+  1158→
+  1159→      <MainPerformanceChart
+  1160→        series={visibleSeries}
+  1161→        metric={metric}
+  1162→        onMetricChange={setMetric}
+  1163→        isLoading={isLoading}
+  1164→      />
+  1165→
+  1166→      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+  1167→        <EngagementRateTrend series={visibleSeries} isLoading={isLoading} />
+  1168→        <ImpressionsByPlatform
+  1169→          breakdown={filteredBreakdown}
+  1170→          isLoading={isLoading}
+  1171→        />
+  1172→      </div>
+  1173→
+  1174→      <PlatformBreakdownTable
+  1175→        breakdown={filteredBreakdown}
+  1176→        isLoading={isLoading}
+  1177→      />
+  1178→
+  1179→      <TopPerformingPosts isLoading={false} />
+  1180→    </div>
+  1181→  );
+  1182→}
+  1183→
