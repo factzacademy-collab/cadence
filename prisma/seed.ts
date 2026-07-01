@@ -47,6 +47,16 @@ async function main() {
     },
   });
 
+  // A second workspace so the switcher is demoable.
+  const workspace2 = await db.workspace.create({
+    data: {
+      name: "Side Studio",
+      slug: "side-studio",
+      plan: "free",
+      memberships: { create: { userId: user.id, role: "Owner" } },
+    },
+  });
+
   console.log("→ Seeding social accounts…");
   const accountData = [
     { platform: "instagram", handle: "@cadencehq", displayName: "Cadence", followers: 184200, connected: true },

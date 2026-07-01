@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cadenceChat, type ChatTurn } from "@/lib/ai";
+import { rateLimit, LIMITS } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
+  const limited = rateLimit(req, { ...LIMITS.ai, keyPrefix: "ai-chat" });
+  if (limited) return limited;
+
   const body = await req.json().catch(() => ({}));
   const message = body?.message;
   if (!message || typeof message !== "string") {

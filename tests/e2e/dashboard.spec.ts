@@ -1,36 +1,14 @@
 import { test, expect } from "@playwright/test";
 
-/** Sign in via the demo button at the start of each test. Retries on failure. */
-async function signInDemo(page: import("@playwright/test").Page) {
-  await page.goto("/");
-  await page.addStyleTag({ content: "nextjs-portal{display:none!important}" });
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      // Click the header's "Sign in" button
-      await page.locator("header").getByRole("button", { name: /^sign in$/i }).click({ timeout: 5_000 });
-      // Wait for the dialog heading
-      await page.getByRole("heading", { name: /welcome back/i }).waitFor({ timeout: 8_000 });
-      await page.getByRole("button", { name: /try the demo/i }).click();
-      // Wait for navigation to dashboard
-      await page.waitForURL(/#app\/overview/, { timeout: 20_000 });
-      await page.getByRole("navigation", { name: /dashboard/i }).waitFor({ timeout: 10_000 });
-      return; // success
-    } catch (e) {
-      if (attempt < 2) {
-        // Reset and retry
-        await page.goto("/");
-        await page.waitForTimeout(500);
-        continue;
-      }
-      throw e;
-    }
-  }
-}
+/** All dashboard tests reuse the authenticated session from auth.setup.ts. */
+test.use({ storageState: "tests/e2e/.auth/user.json" });
 
 test.describe("dashboard", () => {
   test.beforeEach(async ({ page }) => {
-    await signInDemo(page);
+    // Navigate to the app with the saved session.
+    await page.goto("/#app/overview");
+    await page.addStyleTag({ content: "nextjs-portal{display:none!important}" });
+    await page.getByRole("navigation", { name: /dashboard/i }).waitFor({ timeout: 15_000 });
   });
 
   const views = [
@@ -51,9 +29,9 @@ test.describe("dashboard", () => {
 
   for (const [view, heading] of views) {
     test(`navigates to ${view}`, async ({ page }) => {
-      // Click the nav button in the sidebar
+      // Click the nav button in the sidebar — match buttons whose name starts with the view label.
       const nav = page.getByRole("navigation", { name: /dashboard/i });
-      const btn = nav.getByRole("button", { name: new RegExp(`^${view}$`, "i") });
+      const btn = nav.getByRole("button", { name: new RegExp(`^${view}`, "i") }).first();
       await btn.click();
       await expect(page.getByRole("heading", { name: heading, exact: false }).first()).toBeVisible({ timeout: 10_000 });
     });

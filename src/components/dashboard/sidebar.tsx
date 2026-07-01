@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { useApp, type AppView } from "@/lib/store";
 import { Logo } from "@/components/brand/logo";
 import { PlatformBadge } from "@/components/brand/platform-icon";
+import { useWorkspaces, useSwitchWorkspace } from "@/hooks/use-api";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -265,6 +266,46 @@ function SidebarContent({ collapsed }: { collapsed: boolean }) {
 function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
   const setView = useApp((s) => s.setView);
   const setMobileNav = useApp((s) => s.setMobileNav);
+  const { data } = useWorkspaces();
+  const switchWs = useSwitchWorkspace();
+  const [creating, setCreating] = React.useState(false);
+  const [newName, setNewName] = React.useState("");
+
+  const workspaces = data?.workspaces ?? [];
+  const active = workspaces.find((w) => w.active) ?? workspaces[0];
+  const initials = (active?.name ?? "CH").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+
+  const handleSwitch = (id: string) => {
+    if (id === active?.id) return;
+    switchWs.mutate(id, {
+      onSuccess: () => {
+        toast.success("Workspace switched");
+        setMobileNav(false);
+        setView("overview");
+      },
+      onError: () => toast.error("Couldn't switch workspace"),
+    });
+  };
+
+  const handleCreate = () => {
+    if (!newName.trim()) return;
+    fetch("/api/workspaces/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName }),
+    })
+      .then((r) => r.json())
+      .then(() => {
+        toast.success("Workspace created");
+        setNewName("");
+        setCreating(false);
+        setMobileNav(false);
+        setView("overview");
+        // Refetch workspaces by invalidating the cache
+        window.location.reload();
+      })
+      .catch(() => toast.error("Could not create workspace"));
+  };
 
   if (collapsed) {
     return (
@@ -275,10 +316,10 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
             className="mb-1 flex size-9 w-full items-center justify-center rounded-lg bg-gradient-to-br from-primary to-mint text-primary-foreground"
             aria-label="Switch workspace"
           >
-            <span className="text-xs font-bold">CH</span>
+            <span className="text-xs font-bold">{initials}</span>
           </button>
         </TooltipTrigger>
-        <TooltipContent side="right">Cadence HQ</TooltipContent>
+        <TooltipContent side="right">{active?.name ?? "Cadence HQ"}</TooltipContent>
       </Tooltip>
     );
   }
@@ -292,14 +333,14 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
           aria-label="Switch workspace"
         >
           <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-primary to-mint text-[10px] font-bold text-primary-foreground">
-            CH
+            {initials}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-semibold text-sidebar-foreground">
-              Cadence HQ
+              {active?.name ?? "Cadence HQ"}
             </span>
-            <span className="block truncate text-[10px] text-muted-foreground">
-              Scale plan
+            <span className="block truncate text-[10px] text-muted-foreground capitalize">
+              {active?.plan ?? "team"} plan
             </span>
           </span>
           <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
@@ -309,34 +350,58 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
         <DropdownMenuLabel className="text-xs text-muted-foreground">
           Workspaces
         </DropdownMenuLabel>
-        <DropdownMenuItem className="gap-2">
-          <span className="flex size-6 items-center justify-center rounded-md bg-gradient-to-br from-primary to-mint text-[9px] font-bold text-primary-foreground">
-            CH
-          </span>
-          <span className="flex-1 truncate">Cadence HQ</span>
-          <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-            Current
-          </span>
-        </DropdownMenuItem>
-        <DropdownMenuItem className="gap-2">
-          <span className="flex size-6 items-center justify-center rounded-md bg-gradient-to-br from-coral to-amber-brand text-[9px] font-bold text-white">
-            NB
-          </span>
-          <span className="flex-1 truncate">Northbeam Agency</span>
-        </DropdownMenuItem>
+        {workspaces.map((w) => {
+          const wInitials = w.name.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase();
+          return (
+            <DropdownMenuItem
+              key={w.id}
+              className="gap-2"
+              onClick={() => handleSwitch(w.id)}
+            >
+              <span className="flex size-6 items-center justify-center rounded-md bg-gradient-to-br from-primary to-mint text-[9px] font-bold text-primary-foreground">
+                {wInitials}
+              </span>
+              <span className="flex-1 truncate">{w.name}</span>
+              {w.active && (
+                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                  Current
+                </span>
+              )}
+            </DropdownMenuItem>
+          );
+        })}
+        {workspaces.length === 0 && (
+          <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+            No workspaces yet
+          </div>
+        )}
         <DropdownMenuSeparator />
+        {creating ? (
+          <div className="px-1 py-1">
+            <input
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              placeholder="Workspace name…"
+              className="mb-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <div className="flex gap-1">
+              <button onClick={handleCreate} className="flex-1 rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground">Create</button>
+              <button onClick={() => { setCreating(false); setNewName(""); }} className="rounded-md px-2 py-1 text-xs text-muted-foreground">Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <DropdownMenuItem onClick={() => setCreating(true)}>
+            <Plus className="size-4" />
+            Create new workspace
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
-          onClick={() => {
-            setView("team");
-            setMobileNav(false);
-          }}
+          onClick={() => { setView("team"); setMobileNav(false); }}
         >
-          <Plus className="size-4" />
-          Invite teammates
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => toast.info("Workspace switcher coming soon")}>
           <ExternalLink className="size-4" />
-          Create new workspace
+          Manage team
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

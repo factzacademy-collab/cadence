@@ -1,5 +1,6 @@
 import "server-only";
 import { getServerSession } from "next-auth";
+import { cookies } from "next/headers";
 import { authOptions, type AppSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextResponse } from "next/server";
@@ -62,15 +63,28 @@ export async function getAuthContext(): Promise<AuthContext | null> {
   const session = (await getServerSession(authOptions)) as AppSession | null;
   if (!session?.user?.id) return null;
   try {
-    const membership = await db.membership.findFirst({
+    // Check for an active-workspace cookie (set by /api/workspaces/switch).
+    const cookieStore = await cookies();
+    const activeWorkspaceId = cookieStore.get("cadence.workspace")?.value;
+
+    const membership = activeWorkspaceId
+      ? await db.membership.findUnique({
+          where: {
+            userId_workspaceId: { userId: session.user.id, workspaceId: activeWorkspaceId },
+          },
+        })
+      : null;
+
+    // Fall back to the user's first membership if no cookie or invalid cookie.
+    const effective = membership ?? await db.membership.findFirst({
       where: { userId: session.user.id },
-      include: { workspace: true },
     });
-    if (!membership) return null;
+
+    if (!effective) return null;
     return {
       userId: session.user.id,
-      workspaceId: membership.workspaceId,
-      role: membership.role,
+      workspaceId: effective.workspaceId,
+      role: effective.role,
       session,
     };
   } catch (e) {

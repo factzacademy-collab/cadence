@@ -9,12 +9,14 @@ test.describe("marketing site", () => {
 
   test("pricing toggle switches monthly to annual", async ({ page }) => {
     await page.goto("/");
-    // Find the Annual radio by scrolling to it
+    // Scroll to bottom to trigger lazy-loaded pricing, then back up
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(800);
     const annual = page.getByRole("radio", { name: /annual/i });
-    if (await annual.count()) {
-      await annual.scrollIntoViewIfNeeded();
-      await annual.click();
-      await expect(annual).toBeChecked();
+    const count = await annual.count();
+    if (count > 0) {
+      await annual.first().click({ timeout: 5_000 });
+      await expect(annual.first()).toBeChecked();
     }
   });
 

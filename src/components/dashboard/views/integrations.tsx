@@ -45,7 +45,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useIntegrations, useToggleIntegration } from "@/hooks/use-api";
+import { useIntegrations, useToggleIntegration, useAccounts } from "@/hooks/use-api";
+import { PLATFORMS, PLATFORM_LIST } from "@/lib/brand";
+import { PlatformBadge, PlatformIcon } from "@/components/brand/platform-icon";
 import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
@@ -127,6 +129,9 @@ export function IntegrationsView() {
           accent="text-mint"
         />
       </div>
+
+      {/* Social channels connect/disconnect */}
+      <SocialChannelsCard />
 
       {/* Connected strip */}
       {connectedCount > 0 && (
@@ -345,5 +350,104 @@ function IntegrationConfigDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SocialChannelsCard() {
+  const { data, isLoading } = useAccounts();
+  const [pending, setPending] = React.useState<string | null>(null);
+  const accounts = data?.accounts ?? [];
+
+  const handleConnect = async (platform: string) => {
+    setPending(platform);
+    try {
+      const res = await fetch("/api/accounts/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform }),
+      });
+      if (res.ok) toast.success(`${PLATFORMS[platform as keyof typeof PLATFORMS]?.name} connected`);
+      else toast.error("Connection failed");
+    } catch {
+      toast.error("Connection failed");
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const handleDisconnect = async (platform: string) => {
+    setPending(platform);
+    try {
+      const res = await fetch("/api/accounts/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform }),
+      });
+      if (res.ok) toast.success(`${PLATFORMS[platform as keyof typeof PLATFORMS]?.name} disconnected`);
+      else toast.error("Disconnection failed");
+    } catch {
+      toast.error("Disconnection failed");
+    } finally {
+      setPending(null);
+    }
+  };
+
+  return (
+    <SectionCard
+      title="Social channels"
+      description="Connect the social accounts you publish to. Cadence simulates the OAuth flow in this demo."
+    >
+      {isLoading ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="shimmer h-20 rounded-lg border border-border/60" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {PLATFORM_LIST.map((p) => {
+            const account = accounts.find((a) => a.platform === p.id);
+            const connected = account?.connected ?? false;
+            return (
+              <div
+                key={p.id}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border p-3 transition-colors",
+                  connected ? "border-mint/30 bg-mint/5" : "border-border/60"
+                )}
+              >
+                <PlatformBadge platform={p.id} className="size-9" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{p.name}</p>
+                  <p className="truncate text-[10px] text-muted-foreground">
+                    {connected ? (account?.handle ?? "Connected") : "Not connected"}
+                  </p>
+                </div>
+                {connected ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 shrink-0 text-xs"
+                    disabled={pending === p.id}
+                    onClick={() => handleDisconnect(p.id)}
+                  >
+                    {pending === p.id ? "…" : "Disconnect"}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="h-7 shrink-0 text-xs"
+                    disabled={pending === p.id}
+                    onClick={() => handleConnect(p.id)}
+                  >
+                    {pending === p.id ? "…" : "Connect"}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </SectionCard>
   );
 }

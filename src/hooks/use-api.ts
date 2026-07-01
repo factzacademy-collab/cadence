@@ -174,6 +174,33 @@ export function useCampaigns() {
   });
 }
 
+/* ---------------- Workspaces ---------------- */
+export function useWorkspaces() {
+  return useQuery<{
+    workspaces: { id: string; name: string; slug: string; plan: string; role: string; active: boolean }[];
+    activeId: string;
+  }>({
+    queryKey: ["workspaces"],
+    queryFn: () => json(`/api/workspaces`),
+  });
+}
+
+export function useSwitchWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (workspaceId: string) =>
+      json(`/api/workspaces/switch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workspaces"] });
+      qc.invalidateQueries(); // refetch everything since workspace changed
+    },
+  });
+}
+
 /* ---------------- AI ---------------- */
 export function useAiChat() {
   return useMutation({
